@@ -26,21 +26,16 @@ import scipy
 import sympy
 import pytest
 
-from odetoolbox.analytic_integrator import AnalyticIntegrator
-from odetoolbox.spike_generator import SpikeGenerator
-
 from .context import odetoolbox
-from tests.test_utils import _open_json
+from odetoolbox.analytic_integrator import AnalyticIntegrator
+from odetoolbox.debug_utils import import_matplotlib
 from odetoolbox.singularity_detection import SingularityDetection
+from odetoolbox.spike_generator import SpikeGenerator
 from odetoolbox.sympy_helpers import SymmetricEq, _sympy_parse_real
 
-try:
-    import matplotlib as mpl
-    mpl.use("Agg")
-    import matplotlib.pyplot as plt
-    INTEGRATION_TEST_DEBUG_PLOTS = True
-except ImportError:
-    INTEGRATION_TEST_DEBUG_PLOTS = False
+
+mpl, plt = import_matplotlib()
+ENABLE_PLOTS: bool = mpl is not None
 
 
 class TestSingularityDetection:
@@ -211,7 +206,7 @@ class TestSingularityInBothPropagatorAndInhomogeneous:
         ts0 = ts0[:-1]
         ts1 = ts1[:-1]
 
-        if INTEGRATION_TEST_DEBUG_PLOTS:
+        if ENABLE_PLOTS:
 
             #
             #   plot the double exponential ODE
@@ -252,7 +247,7 @@ class TestSingularityInBothPropagatorAndInhomogeneous:
         #   test
         #
 
-        np.testing.assert_allclose(correct, actual)
+        np.testing.assert_allclose(actual, correct)
         np.testing.assert_allclose(y_[:, 1], state["I"], atol=1E-7)
         np.testing.assert_allclose(y_[:, 0], state["I_aux"], atol=1E-7)
 

@@ -26,23 +26,23 @@ import numpy as np
 import os
 import sympy
 import sympy.utilities.autowrap
-from sympy.utilities.autowrap import CodeGenArgumentListError
+import sympy.utilities.codegen
 import time
 
 from .analytic_integrator import AnalyticIntegrator
 from .config import Config
 from .integrator import Integrator
-from .plot_helper import import_matplotlib
 from .shapes import Shape
 from .system_of_shapes import SystemOfShapes
 from .sympy_helpers import _is_sympy_type, _sympy_parse_real
+from .debug_utils import import_matplotlib
 
 try:
     import pygsl.odeiv as odeiv
     PYGSL_AVAILABLE = True
 except ImportError as ie:
-    logging.warning("PyGSL is not available. The stiffness test will be skipped.")
-    logging.warning("Error when importing: " + str(ie))
+    logging.getLogger(__name__).warning("PyGSL is not available. The stiffness test will be skipped.")
+    logging.getLogger(__name__).warning("Error when importing: " + str(ie))
     PYGSL_AVAILABLE = False
 
 
@@ -118,7 +118,7 @@ class MixedIntegrator(Integrator):
                                                                                    args=self.all_variable_symbols,
                                                                                    backend="cython",
                                                                                    helpers=Shape._sympy_autowrap_helpers)
-            except CodeGenArgumentListError:
+            except sympy.utilities.codegen.CodeGenArgumentListError:
                 raise ParametersIncompleteException("Integration not possible because numerical values were not specified for all parameters.")
         self.symbolic_jacobian_wrapped = np.empty(self.symbolic_jacobian_.shape, dtype=object)
         for i in range(self.symbolic_jacobian_.shape[0]):
@@ -263,7 +263,7 @@ class MixedIntegrator(Integrator):
 
                     if h_min < h_min_lower_bound:
                         estr = "Integration step below %.e (s=%.f). Please check your ODE." % (h_min_lower_bound, h_min)
-                        logging.warning(estr)
+                        logging.getLogger(__name__).warning(estr)
                         if raise_errors:
                             raise Exception(estr)
 
@@ -337,7 +337,7 @@ class MixedIntegrator(Integrator):
             if self._debug_plot_dir:
                 self.integrator_debug_plot(t_log, h_log, y_log, dir=self._debug_plot_dir)
 
-        logging.info("For integrator = " + str(self.numeric_integrator) + ": h_min = " + str(h_min) + ", h_avg = " + str(h_avg) + ", runtime = " + str(runtime))
+        logging.getLogger(__name__).info("For integrator = " + str(self.numeric_integrator) + ": h_min = " + str(h_min) + ", h_avg = " + str(h_avg) + ", runtime = " + str(runtime))
 
         sym_list = self._system_of_shapes.x_
 
@@ -460,10 +460,10 @@ class MixedIntegrator(Integrator):
             # return [ float(self._update_expr[str(sym)].evalf(subs=self._locals)) for sym in self._system_of_shapes.x_ ]	# non-wrapped version
             _ret = [self._update_expr_wrapped[str(sym)](*y) for sym in self._system_of_shapes.x_]
         except Exception as e:
-            logging.error("E==>", type(e).__name__ + ": " + str(e))
-            logging.error("     Local parameters at time of failure:")
+            logging.getLogger(__name__).error("E==>", type(e).__name__ + ": " + str(e))
+            logging.getLogger(__name__).error("     Local parameters at time of failure:")
             for k, v in self._locals.items():
-                logging.error("    ", k, "=", v)
+                logging.getLogger(__name__).error("    ", k, "=", v)
             raise
 
         return _ret

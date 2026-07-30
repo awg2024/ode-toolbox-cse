@@ -23,20 +23,14 @@ import logging
 import sympy
 import numpy as np
 
-from tests.test_utils import _open_json
-
-try:
-    import matplotlib as mpl
-    mpl.use('Agg')
-    import matplotlib.pyplot as plt
-    INTEGRATION_TEST_DEBUG_PLOTS = True
-except ImportError:
-    INTEGRATION_TEST_DEBUG_PLOTS = False
-
-
 import odetoolbox
 from odetoolbox.analytic_integrator import AnalyticIntegrator
+from odetoolbox.debug_utils import import_matplotlib
 from odetoolbox.spike_generator import SpikeGenerator
+from tests.test_utils import load_test_json
+
+mpl, plt = import_matplotlib()
+ENABLE_PLOTS: bool = mpl is not None
 
 
 class TestAnalyticIntegrator:
@@ -52,7 +46,7 @@ class TestAnalyticIntegrator:
         #   timeseries using ode-toolbox generated propagators
         #
 
-        indict = _open_json("test_alpha_function_of_time.json")
+        indict = load_test_json("test_alpha_function_of_time.json")
         solver_dict = odetoolbox.analysis(indict, disable_stiffness_check=True, log_level=logging.DEBUG)
         assert len(solver_dict) == 1
         solver_dict = solver_dict[0]
@@ -89,7 +83,7 @@ class TestAnalyticIntegrator:
             for k, v in state[use_caching].items():
                 state[use_caching][k] = np.array(v)
 
-        if INTEGRATION_TEST_DEBUG_PLOTS:
+        if ENABLE_PLOTS:
             fig, ax = plt.subplots(2, sharex=True)
 
             ax[0].plot(1E3 * timevec, state[True]["I"], linewidth=2, linestyle='--', dashes=(5, 1), marker="x", label="I (caching)", alpha=.8)

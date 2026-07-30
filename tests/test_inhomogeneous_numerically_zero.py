@@ -25,16 +25,13 @@ import numpy as np
 import scipy.integrate
 import sympy
 
-try:
-    import matplotlib as mpl
-    mpl.use('Agg')
-    import matplotlib.pyplot as plt
-    DEBUG_PLOTS = True
-except ImportError:
-    DEBUG_PLOTS = False
-
 from .context import odetoolbox
 from odetoolbox.analytic_integrator import AnalyticIntegrator
+from odetoolbox.debug_utils import import_matplotlib
+
+
+mpl, plt = import_matplotlib()
+ENABLE_PLOTS: bool = mpl is not None
 
 
 class TestInhomogeneousNumericallyZero:
@@ -99,7 +96,7 @@ class TestInhomogeneousNumericallyZero:
         #   plot
         #
 
-        if DEBUG_PLOTS:
+        if ENABLE_PLOTS:
             fig, ax = plt.subplots(nrows=3)
             ax[0].plot(timevec, correct, label="reference")
             ax[1].plot(timevec, actual, label="actual")
@@ -118,7 +115,7 @@ class TestInhomogeneousNumericallyZero:
         #   test
         #
 
-        np.testing.assert_allclose(correct, actual)
+        np.testing.assert_allclose(actual, correct)
 
     def test_inhomogeneous_numerically_zero(self):
         self._test_inhomogeneous_numerically_zero(late_ltd_check=1., late_ltp_check=-1.)

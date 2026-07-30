@@ -27,15 +27,12 @@ import sympy
 import odetoolbox
 
 from odetoolbox.analytic_integrator import AnalyticIntegrator
+from odetoolbox.debug_utils import import_matplotlib
 from odetoolbox.spike_generator import SpikeGenerator
 
-try:
-    import matplotlib as mpl
-    mpl.use("Agg")
-    import matplotlib.pyplot as plt
-    INTEGRATION_TEST_DEBUG_PLOTS = True
-except ImportError:
-    INTEGRATION_TEST_DEBUG_PLOTS = False
+
+mpl, plt = import_matplotlib()
+ENABLE_PLOTS: bool = mpl is not None
 
 
 class TestDoubleExponential:
@@ -137,7 +134,7 @@ class TestDoubleExponential:
         rec_I_interp = np.interp(np.hstack([ts0, ts1, ts2]), timevec, state["I"])
         rec_I_aux_interp = np.interp(np.hstack([ts0, ts1, ts2]), timevec, state["I_aux"])
 
-        if INTEGRATION_TEST_DEBUG_PLOTS:
+        if ENABLE_PLOTS:
             tmax = time_to_max(tau_1, tau_2)
             mpl.rcParams["text.usetex"] = True
 

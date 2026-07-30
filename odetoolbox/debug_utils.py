@@ -1,5 +1,5 @@
 #
-# plot_helper.py
+# debug_utils.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -21,6 +21,7 @@
 
 import logging
 
+
 _mpl = None
 _plt = None
 
@@ -32,17 +33,17 @@ def import_matplotlib():
     if _mpl:
         return _mpl, _plt
     try:
-        import matplotlib as mpl
-        mpl.use('Agg')
-        import matplotlib.pyplot as plt
-
         def update_matplotlib_log_level():
             log_level = "WARNING"
-            logging.getLogger("matplotlib.colorbar").setLevel(log_level)
-            logging.getLogger("matplotlib.font_manager").setLevel(log_level)
-            logging.getLogger("matplotlib.ticker").setLevel(log_level)
+            logging.getLogger("matplotlib").setLevel(log_level)
+            logging.getLogger("PIL").setLevel(log_level)
 
         update_matplotlib_log_level()
+
+        import matplotlib as mpl
+        mpl.use("Agg")
+        import matplotlib.pyplot as plt
+
         _mpl, _plt = mpl, plt
         return _mpl, _plt
 

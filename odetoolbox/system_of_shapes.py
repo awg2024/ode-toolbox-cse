@@ -89,7 +89,6 @@ class SystemOfShapes:
         :param b: Vector containing inhomogeneous part (constant term).
         :param c: Vector containing nonlinear part.
         """
-        logging.debug("Initializing system of shapes with x = " + str(x) + ", A = " + str(A) + ", b = " + str(b) + ", c = " + str(c))
         assert x.shape[0] == A.shape[0] == A.shape[1] == b.shape[0] == c.shape[0]
         self.x_ = x
         self.A_ = A
@@ -200,7 +199,7 @@ class SystemOfShapes:
 
         return SystemOfShapes(x_sub, A_sub, b_sub, c_sub, shapes_sub)
 
-    def _generate_propagator_matrix(self, A, use_alternative_expM: bool = False):
+    def _generate_propagator_matrix(self, A, use_alternative_expM: bool = False) -> sympy.Matrix:
         r"""Generate the propagator matrix by matrix exponentiation."""
 
         if use_alternative_expM:
@@ -210,13 +209,13 @@ class SystemOfShapes:
 
         try:
             # optimized: compute propagators separately for each block diagonal element of ``A``
-            logging.debug("Computing propagator matrix (block-diagonal optimisation)...")
+            logging.getLogger(__name__).debug("Computing propagator matrix (block-diagonal optimisation)...")
             blocks = get_block_diagonal_blocks(np.array(A))
-            propagators = [sympy.simplify(expM(sympy.Matrix(block) * sympy.Symbol(Config().output_timestep_symbol, real=True))) for block in blocks]
+            propagators = [_custom_simplify_expr(expM(sympy.Matrix(block) * sympy.Symbol(Config().output_timestep_symbol, real=True))) for block in blocks]
             P = sympy.Matrix(scipy.linalg.block_diag(*propagators))
         except GetBlockDiagonalException:
             # naive: calculate propagators in one step -- can be quite slow if ``A`` is a large matrix
-            logging.debug("Computing propagator matrix...")
+            logging.getLogger(__name__).debug("Computing propagator matrix...")
             P = _custom_simplify_expr(expM(A * sympy.Symbol(Config().output_timestep_symbol, real=True)))
 
         # check the result
@@ -243,18 +242,7 @@ class SystemOfShapes:
 
         return solver_dict
 
-    def _remove_duplicate_conditions(self, conditions: Set[SymmetricEq]):
-        r"""Remove duplicated conditions. ``conditions`` is already a set of ``SymmetricEq`` (so that ``a == b`` is equivalent to ``b == a``), so duplicates should normally not be possible anyway, but sometimes, in addition to ``a == b``, the condition ``-a == -b`` is present, which is effectively a duplicate. This method removes those kinds of duplicates."""
-        for cond in conditions:
-            inverted_eq = SymmetricEq(-cond.lhs, -cond.rhs)
-            if inverted_eq in conditions:
-                conditions.discard(cond)
-                return self._remove_duplicate_conditions(conditions)
-
-        # nothing was removed
-        return conditions
-
-    def generate_propagator_solver(self, disable_singularity_detection: bool = False, use_alternative_expM: bool = False):
+    def generate_propagator_solver(self, disable_singularity_detection: bool = False, disable_singularity_mitigation: bool = False, use_alternative_expM: bool = False):
         r"""
         Generate the propagator matrix and symbolic expressions for propagator-based updates; return as JSON.
         """
@@ -269,16 +257,9 @@ class SystemOfShapes:
             try:
                 conditions = SingularityDetection.find_propagator_singularities(P, self.A_)
                 conditions = conditions.union(SingularityDetection.find_inhomogeneous_singularities(self.A_, self.b_))
-                conditions = self._remove_duplicate_conditions(conditions)
+                conditions = SingularityDetection._remove_duplicate_conditions(conditions)
 
-                if conditions:
-                    # if there is one or more condition under which the solution goes to infinity...
-                    logging.info("Under certain conditions, the default analytic solver contains singularities due to division by zero.")
-                    logging.info("List of all conditions that result in a division by zero:")
-                    for cond in conditions:
-                        logging.info("\t" + str(cond.lhs) + " = " + str(cond.rhs))
-                    logging.info("Alternate solvers will be generated for each of these conditions (and combinations thereof).")
-
+                if conditions and not disable_singularity_mitigation:
                     # generate solver for the base case (with singularity conditions that are not met)
                     default_solver = self.generate_solver_dict_based_on_propagator_matrix_(P)
 
@@ -295,6 +276,7 @@ class SystemOfShapes:
 
                     num_conditions = len(conditions)
                     condition_permutations = list(itertools.product([False, True], repeat=num_conditions))
+                    logging.getLogger(__name__).info("Alternate solvers will be generated for each of these conditions (and combinations thereof), which amounts to " + str(len(condition_permutations)) + " solvers that will be generated.")
                     for condition_permutation in condition_permutations:
                         # each ``condition_permutation[i]`` is True/False corresponding to condition i
 
@@ -310,11 +292,11 @@ class SystemOfShapes:
 
                         condition_str: str = " && ".join(["(" + str(eq.lhs) + (" == " if isinstance(eq, SymmetricEq) else "!=") + str(eq.rhs) + ")" for eq in cond_set])
 
-                        logging.debug("Generating solver for condition: " + str(condition_str))
-
                         if not any([isinstance(eq, SymmetricEq) for eq in cond_set]):
                             # this is the default condition, only containing inequalities
                             continue
+
+                        logging.getLogger(__name__).debug("Generating solver for condition: " + str(condition_str))
 
                         conditional_A = self.A_.copy()
                         conditional_b = self.b_.copy()
@@ -328,7 +310,7 @@ class SystemOfShapes:
                                 conditional_c = conditional_c.subs(eq.lhs, eq.rhs)
 
                         conditional_dynamics = SystemOfShapes(self.x_, conditional_A, conditional_b, conditional_c, self.shapes_)
-                        solver_dict_conditional = conditional_dynamics.generate_propagator_solver(disable_singularity_detection=True)
+                        solver_dict_conditional = conditional_dynamics.generate_propagator_solver(disable_singularity_detection=True, disable_singularity_mitigation=True, use_alternative_expM=use_alternative_expM)
                         solver_dict["conditions"][condition_str] = {"propagators": solver_dict_conditional["propagators"],
                                                                     "update_expressions": solver_dict_conditional["update_expressions"]}
 
@@ -337,7 +319,7 @@ class SystemOfShapes:
                     return solver_dict
 
             except SingularityDetectionException:
-                logging.warning("Could not check the propagator matrix for singularities.")
+                logging.getLogger(__name__).warning("Could not check the propagator matrix for singularities.")
 
         return self.generate_solver_dict_based_on_propagator_matrix_(P)
 
@@ -389,7 +371,6 @@ class SystemOfShapes:
             if not _is_zero(self.b_[row]):
                 # only simplify in case an inhomogeneous term is present
                 update_expr[str(self.x_[row])] = _custom_simplify_expr(update_expr[str(self.x_[row])])
-            logging.debug("update_expr[" + str(self.x_[row]) + "] = " + str(update_expr[str(self.x_[row])]))
 
         all_state_symbols = [str(sym) for sym in self.x_]
         initial_values = {sym: str(self.get_initial_value(sym)) for sym in all_state_symbols}

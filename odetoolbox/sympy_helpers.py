@@ -46,6 +46,7 @@ def _sympy_parse_real(expr: str, global_dict: Optional[Dict] = None, local_dict:
     else:
         global_dict_copy = None
 
+    # first parse executes an initial parse to extract implicit variable symbols 
     initial_parse = sympy.parsing.sympy_parser.parse_expr(expr, global_dict=global_dict_copy, local_dict=local_dict, evaluate=evaluate)
 
     all_syms = initial_parse.free_symbols
@@ -67,6 +68,7 @@ def _sympy_parse_real(expr: str, global_dict: Optional[Dict] = None, local_dict:
     else:
         global_dict_copy = None
 
+    # maps all discovered symbols to a strict real=True dict and parses the string a final time
     final_parse = sympy.parsing.sympy_parser.parse_expr(expr, global_dict=global_dict_copy, local_dict=extended_local_dict, evaluate=evaluate)
 
     for sym in final_parse.free_symbols:
@@ -75,7 +77,7 @@ def _sympy_parse_real(expr: str, global_dict: Optional[Dict] = None, local_dict:
     return final_parse
 
 
-def _is_constant_term(term, parameters: Mapping[sympy.Symbol, str] = None) -> bool:
+def _is_constant_term(term, parameters: Mapping[sympy.Symbol, str] = None) -> bool: # evaluates a mathematical term to see if it acts as a constant value or a fixed, rather than a dynamic state
     r"""
     :return: :python:`True` if and only if this term contains only numerical values and parameters; :python:`False` otherwise.
     """
@@ -95,7 +97,7 @@ def _is_constant_term(term, parameters: Mapping[sympy.Symbol, str] = None) -> bo
         or all([sym in parameters.keys() for sym in term.free_symbols])
 
 
-def _check_numerical_issue(var: str, check_infty: bool = True) -> None:
+def _check_numerical_issue(var: str, check_infty: bool = True) -> None: # Acts as a compiler-time safety tripwire to detect broken math operations, such as implicit divisions by zero
     forbidden_vars = ["zoo", "nan", "NaN"]
     if check_infty:
         forbidden_vars.append("oo")
@@ -104,7 +106,7 @@ def _check_numerical_issue(var: str, check_infty: bool = True) -> None:
         raise NumericalIssueException("The variable \"" + stripped_var_name + "\" was found. This indicates a numerical problem while solving the system of ODEs. Please check the input for correctness (such as the presence of divisions by zero).")
 
 
-def _check_forbidden_name(var: str) -> None:
+def _check_forbidden_name(var: str) -> None: # Enforces security by blocking users from giving variables or parameters names that collide with backend target languages.
     from .shapes import MalformedInputException
 
     stripped_var_name = str(var).strip("'")

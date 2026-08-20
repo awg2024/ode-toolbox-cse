@@ -41,7 +41,7 @@ except ImportError as ie:
     PYGSL_AVAILABLE = False
 
 if PYGSL_AVAILABLE:
-    from .stiffness import StiffnessTester
+    from .stiffness import StiffnessTester # stability profiles of the heavy computational heavy eqs. 
 
 try:
     logging.getLogger("graphviz").setLevel(logging.ERROR)
@@ -63,11 +63,15 @@ def _find_analytically_solvable_equations(shape_sys, shapes, parameters=None):
     Perform dependency analysis and plot dependency graph.
     """
     logging.getLogger(__name__).debug("Finding analytically solvable equations...")
-    dependency_edges = shape_sys.get_dependency_edges()
+
+    dependency_edges = shape_sys.get_dependency_edges() # dependency edges of the ODE. building a graph showing which variables influence eachother 
 
     if PLOT_DEPENDENCY_GRAPH:
-        node_is_analytically_solvable = {sym: False for sym in list(shape_sys.x_)}
-        DependencyGraphPlotter.plot_graph(shapes, dependency_edges, node_is_analytically_solvable, fn="/tmp/ode_dependency_graph.dot")
+
+        node_is_analytically_solvable = {sym: False for sym in list(shape_sys.x_)} # checking for linear coefficients 
+
+        # this function creates a dict mapping to each vairable to true (solvable) or false (not solvable / non-linear)
+        DependencyGraphPlotter.plot_graph(shapes, dependency_edges, node_is_analytically_solvable, fn="/tmp/ode_dependency_graph.dot") # 
 
     node_is_analytically_solvable = shape_sys.get_lin_cc_symbols(dependency_edges, parameters=parameters)
 
@@ -75,15 +79,16 @@ def _find_analytically_solvable_equations(shape_sys, shapes, parameters=None):
         DependencyGraphPlotter.plot_graph(shapes, dependency_edges, node_is_analytically_solvable, fn="/tmp/ode_dependency_graph_analytically_solvable_before_propagated.dot")
 
     # cannot analytically solve inhomogeneous, order > 1 shapes
-    for i in range(len(shape_sys.x_)):
+    for i in range(len(shape_sys.x_)): 
         if not _is_zero(shape_sys.b_[i]) and shape_sys.shape_order_from_system_matrix(i) > 1 and shape_sys.x_[i] in shape_sys.get_connected_symbols(i):
-            node_is_analytically_solvable[shape_sys.x_[i]] = False
+            node_is_analytically_solvable[shape_sys.x_[i]] = False # too complex for an analytical solver 
 
         for j in range(len(shape_sys.x_)):
             if not i == j and not _is_zero(shape_sys.A_[i, j]) and not _is_zero(shape_sys.b_[_find_in_matrix(shape_sys.x_, shape_sys.x_[j])]):
-                # this shape depends on another ODE that is inhomogeneous -- can't be solved analytically by this version of ODE-toolbox
+                # this shape depends on another ODE that is inhomogeneous -- can't be solved analytically by this version of ODE-toolbox (cascading analytical solution)
                 node_is_analytically_solvable[shape_sys.x_[i]] = False
 
+    # propagating the judgement, if variable a depends on variable b && variable b (unsolvable) therefore a is unsolvable 
     node_is_analytically_solvable = shape_sys.propagate_lin_cc_judgements(node_is_analytically_solvable, dependency_edges)
     if PLOT_DEPENDENCY_GRAPH:
         DependencyGraphPlotter.plot_graph(shapes, dependency_edges, node_is_analytically_solvable, fn="/tmp/ode_dependency_graph_analytically_solvable.dot")
@@ -104,7 +109,7 @@ def _read_global_config(indict):
 
 def _from_json_to_shapes(indict, parameters=None) -> Tuple[List[Shape], Dict[sympy.Symbol, str]]:
     r"""
-    Process the input, construct Shape instances.
+    Process the indct (json) input, construct Shape instances.
 
     :param indict: ODE-toolbox input dictionary.
     """
@@ -121,17 +126,17 @@ def _from_json_to_shapes(indict, parameters=None) -> Tuple[List[Shape], Dict[sym
         all_variable_symbols.extend(shape.get_state_variables())
         all_variable_symbols_.update(shape.get_state_variables(derivative_symbol=Config().differential_order_symbol))
         all_parameter_symbols.update(set(shape.reconstitute_expr().free_symbols))
-    all_parameter_symbols -= all_variable_symbols_
+    all_parameter_symbols -= all_variable_symbols_ # building master list of every symbol used in nestml 
     del all_variable_symbols_
     assert all([_is_sympy_type(sym) for sym in all_variable_symbols])
 
-    # validate input for forbidden names
+    # validate input for forbidden names prevent collisions 
     for var in set(all_variable_symbols) | all_parameter_symbols:
         _check_forbidden_name(var)
         assert var.is_real
 
     # validate parameters
-    for param in all_parameter_symbols:
+    for param in all_parameter_symbols: # symbol flagged as param but doesnt have a starting num 
         if parameters is None:
             parameters = dict()
 
@@ -143,7 +148,7 @@ def _from_json_to_shapes(indict, parameters=None) -> Tuple[List[Shape], Dict[sym
 
     # second run with the now-known list of variable symbols
     shapes = []
-    for shape_json in indict["dynamics"]:
+    for shape_json in indict["dynamics"]: # precise definitions instiations with correct boundary terms 
         shape = Shape.from_json(shape_json, all_variable_symbols=all_variable_symbols, parameters=parameters)
         shapes.append(shape)
 
@@ -151,7 +156,8 @@ def _from_json_to_shapes(indict, parameters=None) -> Tuple[List[Shape], Dict[sym
 
 
 def _find_variable_definition(indict, name: str, order: int) -> Optional[str]:
-    r"""Find the definition (as a string in the input dictionary) of variable named ``name`` with order ``order``, and return it as a string. Return None if a definition by that name and order could not be found."""
+    r"""Find the definition (as a string in the input dictionary) of variable named ``name`` with order ``order``, and return it as a string. 
+    Return None if a definition by that name and order could not be found."""
     for dyn in indict["dynamics"]:
         if "expression" in dyn.keys():
             exprs = [dyn["expression"]]
@@ -167,32 +173,37 @@ def _find_variable_definition(indict, name: str, order: int) -> Optional[str]:
 
 
 def _get_all_first_order_variables(indict) -> Iterable[str]:
-    r"""Return a list of variable names, containing those variables that were defined as a first-order ordinary differential equation in the input."""
+    r"""Return a list of variable names, 
+    containing those variables that were defined as a first-order ordinary differential equation in the input."""
     variable_names = []
 
-    for dyn in indict["dynamics"]:
+    for dyn in indict["dynamics"]: # iterates through the models dynamics block.
         if "expression" in dyn.keys():
-            exprs = [dyn["expression"]]
+            exprs = [dyn["expression"]] # checking the objects stored under expression block
         elif "expressions" in dyn.keys():
             exprs = dyn["expressions"]
 
         for expr in exprs:
-            name, order, rhs = Shape._parse_defining_expression(expr)
+            name, order, rhs = Shape._parse_defining_expression(expr) # parsing the ode for (name(V''), order(2) then the mathematical expression string 
             if order == 1:
-                variable_names.append(name)
+                variable_names.append(name) # filters for first order 
 
     return variable_names
 
 
 def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
-    if "update_expressions" in solver_json.keys():
+      r"""dependency checker. looks for specific symbol names and checks if its used in the processed solver structural json.
+      searching update_expressions, propagators, conditions"""
+    
+    
+    if "update_expressions" in solver_json.keys(): # !! potential place to think about cse implementation here? 
         for sym, expr in solver_json["update_expressions"].items():
             if param_name in [str(sym) for sym in list(expr.atoms())]:
                 return True
 
     if "propagators" in solver_json.keys():
         for sym, expr in solver_json["propagators"].items():
-            if param_name in [str(sym) for sym in list(expr.atoms())]:
+            if param_name in [str(sym) for sym in list(expr.atoms())]: 
                 return True
 
     if "conditions" in solver_json.keys():

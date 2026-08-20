@@ -44,29 +44,32 @@ class GetBlockDiagonalException(Exception):
 
 
 def get_block_diagonal_blocks(A):
-    assert A.shape[0] == A.shape[1], "matrix A should be square"
+    assert A.shape[0] == A.shape[1], "matrix A should be square" # maps set of variables to the derivatives 
 
     A_connectivity_undirected = (A != 0) | (A.T != 0)    # make symmetric (undirected) connectivity graph from the system matrix
 
+    # creating symmetric boolean matrix where an edge (1) exists if two varibles influence eachother (undirected graph)
     graph_components = scipy.sparse.csgraph.connected_components(A_connectivity_undirected)[1]
 
+    # checking the step differences between the matrices. we want our sub-matrices to be grouped closely. 
     if not all(np.diff(graph_components) >= 0):
         # matrix is not ordered
         raise GetBlockDiagonalException()
 
     blocks = []
-    for i in np.unique(graph_components):
+    for i in np.unique(graph_components): # code block for slicing out independent lobkcs 
         idx = np.where(graph_components == i)[0]
 
         if not all(np.diff(idx) > 0) or not (len(idx) == 1 or (len(np.unique(np.diff(idx))) == 1 and np.unique(np.diff(idx))[0] == 1)):
             raise GetBlockDiagonalException()
 
-        idx_min = np.amin(idx)
+        # for each isolated group of variables 
+        idx_min = np.amin(idx) 
         idx_max = np.amax(idx)
-        block = A[idx_min:idx_max + 1, idx_min:idx_max + 1]
+        block = A[idx_min:idx_max + 1, idx_min:idx_max + 1]  # assert assigned previously to ensure indices form a contiguous sequence of ints 
         blocks.append(block)
 
-    return blocks
+    return blocks # diagonalized blocks returned 
 
 
 class PropagatorGenerationException(Exception):
@@ -96,23 +99,22 @@ class SystemOfShapes:
         self.c_ = c
         self.shapes_ = shapes
 
-    def get_shape_by_symbol(self, sym: Union[str, sympy.Symbol]) -> Optional[Shape]:
+    def get_shape_by_symbol(self, sym: Union[str, sympy.Symbol]) -> Optional[Shape]: # utility look up for shape by symbol
         for shape in self.shapes_:
             if str(shape.symbol) == str(sym):
                 return shape
 
         return None
 
-    def get_initial_value(self, sym: Union[str, sympy.Symbol]):
+    def get_initial_value(self, sym: Union[str, sympy.Symbol]): # extracts default value of a variable. passing _P__V_m it searches for V_m default value. 
         for shape in self.shapes_:
             if str(shape.symbol) == str(sym).replace(Config().differential_order_symbol, "").replace("'", ""):
                 return shape.get_initial_value(str(sym).replace(Config().differential_order_symbol, "'"))
 
         assert False, "Unknown symbol: " + str(sym)
 
-    def get_dependency_edges(self):
+    def get_dependency_edges(self): # builds a directed graph of dependencies between your ODE varaibles. scanning eqs to see which variables influence eachother 
         E = []
-
         for i, sym1 in enumerate(self.x_):
             for j, sym2 in enumerate(self.x_):
                 if not _is_zero(self.A_[j, i]) or sym1 in self.c_[j].free_symbols:
@@ -120,9 +122,10 @@ class SystemOfShapes:
 
         return E
 
-    def get_lin_cc_symbols(self, E, parameters=None):
+    def get_lin_cc_symbols(self, E, parameters=None): 
         r"""
-        Retrieve the variable symbols of those shapes that are linear and constant coefficient. In the case of a higher-order shape, will return all the variable symbols with ``"__d"`` suffixes up to the order of the shape.
+        Retrieve the variable symbols of those shapes that are linear and constant coefficient. 
+        In the case of a higher-order shape, will return all the variable symbols with ``"__d"`` suffixes up to the order of the shape.
         """
         # get all symbols for all shapes as a list
         symbols = list(self.x_)
@@ -179,7 +182,8 @@ class SystemOfShapes:
 
     def get_sub_system(self, symbols):
         r"""
-        Return a new :python:`SystemOfShapes` instance which discards all symbols and equations except for those in :python:`symbols`. This is probably only sensible when the elements in :python:`symbols` do not dependend on any of the other symbols that will be thrown away.
+        Return a new :python:`SystemOfShapes` instance which discards all symbols and equations except for those in :python:`symbols`. 
+            This is probably only sensible when the elements in :python:`symbols` do not dependend on any of the other symbols that will be thrown away.
         """
         idx = [i for i, sym in enumerate(self.x_) if sym in symbols]
         idx_compl = [i for i, sym in enumerate(self.x_) if not sym in symbols]
@@ -202,8 +206,8 @@ class SystemOfShapes:
     def _generate_propagator_matrix(self, A, use_alternative_expM: bool = False) -> sympy.Matrix:
         r"""Generate the propagator matrix by matrix exponentiation."""
 
-        if use_alternative_expM:
-            expM = expMt
+        if use_alternative_expM: # computes matrix exponential 
+            expM = expMt 
         else:
             expM = sympy.exp
 
@@ -216,7 +220,7 @@ class SystemOfShapes:
         except GetBlockDiagonalException:
             # naive: calculate propagators in one step -- can be quite slow if ``A`` is a large matrix
             logging.getLogger(__name__).debug("Computing propagator matrix...")
-            P = _custom_simplify_expr(expM(A * sympy.Symbol(Config().output_timestep_symbol, real=True)))
+            P = _custom_simplify_expr(expM(A * sympy.Symbol(Config().output_timestep_symbol, real=True))) # 
 
         # check the result
         if sympy.I in sympy.preorder_traversal(P):
@@ -227,7 +231,7 @@ class SystemOfShapes:
     def _merge_conditions(self, solver_dict):
         r"""merge together conditions (a OR b OR c OR...) if the propagators and update_expressions are the same"""
 
-        for condition, sub_solver_dict in solver_dict["conditions"].items():
+        for condition, sub_solver_dict in solver_dict["conditions"].items(): # combining matrix maths and updating code blocks, called recursively 
             for condition2, sub_solver_dict2 in solver_dict["conditions"].items():
                 if condition == condition2:
                     # don't check a condition against itself
@@ -253,10 +257,11 @@ class SystemOfShapes:
         #    singularity detection
         #
 
-        if not disable_singularity_detection:
+        if not disable_singularity_detection: # checks for singularities 
             try:
                 conditions = SingularityDetection.find_propagator_singularities(P, self.A_)
-                conditions = conditions.union(SingularityDetection.find_inhomogeneous_singularities(self.A_, self.b_))
+                # find parameters sets to uncover where matrix calculation collapses
+                conditions = conditions.union(SingularityDetection.find_inhomogeneous_singularities(self.A_, self.b_)) 
                 conditions = SingularityDetection._remove_duplicate_conditions(conditions)
 
                 if conditions and not disable_singularity_mitigation:
@@ -324,10 +329,8 @@ class SystemOfShapes:
         return self.generate_solver_dict_based_on_propagator_matrix_(P)
 
     def generate_solver_dict_based_on_propagator_matrix_(self, P: sympy.Matrix):
-
-        #
         #   generate symbols for each nonzero entry of the propagator matrix
-        #
+        
 
         P_expr = {}     # the expression corresponding to each propagator symbol
         update_expr = {}    # keys are str(variable symbol), values are str(expressions) that evaluate to the new value of the corresponding key
@@ -379,6 +382,13 @@ class SystemOfShapes:
                        "update_expressions": update_expr,
                        "state_variables": all_state_symbols,
                        "initial_values": initial_values}
+
+        #######
+        # CSE implementation
+        ######
+        # instead of the function passing in non-zero output strings or json code representing explicit variable equations 
+        # we could run cse here or call the required functions to elimination generated equations? although
+        # this is just propagators? 
 
         return solver_dict
 

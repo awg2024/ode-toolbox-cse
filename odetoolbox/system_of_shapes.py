@@ -383,12 +383,6 @@ class SystemOfShapes:
                        "state_variables": all_state_symbols,
                        "initial_values": initial_values}
 
-        #######
-        # CSE implementation
-        ######
-        # instead of the function passing in non-zero output strings or json code representing explicit variable equations 
-        # we could run cse here or call the required functions to elimination generated equations? although
-        # this is just propagators? 
 
         return solver_dict
 

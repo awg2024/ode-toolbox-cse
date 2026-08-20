@@ -192,11 +192,11 @@ def _get_all_first_order_variables(indict) -> Iterable[str]:
 
 
 def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
-      r"""dependency checker. looks for specific symbol names and checks if its used in the processed solver structural json.
-      searching update_expressions, propagators, conditions"""
+    #dependency checker. looks for specific symbol names and checks if its used in the processed solver structural json.
+    #  searching update_expressions, propagators, conditions
     
-    
-    if "update_expressions" in solver_json.keys(): # !! potential place to think about cse implementation here? 
+     # !! potential place to think about cse implementation here 
+    if "update_expressions" in solver_json.keys():
         for sym, expr in solver_json["update_expressions"].items():
             if param_name in [str(sym) for sym in list(expr.atoms())]:
                 return True
@@ -225,7 +225,7 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
     r"""
     Like analysis(), but additionally returns ``shape_sys`` and ``shapes``.
 
-    For internal use only!
+    For internal use only. External code won't be relying on this but makes it a good area for debugging. 
     """
 
     # import sys;sys.setrecursionlimit(max(sys.getrecursionlimit(), 10000))
@@ -323,6 +323,7 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
                 kwargs["analytic_solver_dict"] = analytic_solver_json
             tester = StiffnessTester(sub_sys, shapes, **kwargs)
             solver_type = tester.check_stiffness()
+            
             if not solver_type is None:
                 solver_json["solver"] += "-" + solver_type
                 logging.getLogger(__name__).info(solver_type + " scheme")
@@ -372,7 +373,8 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
                     solver_json["parameters"][param_name] = str(sympy_expr)
 
     #
-    #   convert expressions from sympy to string
+    #   convert expressions from sympy to string (cse implementation)
+    #   
     #
 
     if type(preserve_expressions) is bool:

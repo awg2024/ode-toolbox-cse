@@ -62,3 +62,13 @@ def common_subexpression_elimination(expressions, symbol_prefix="__ode_cse_tmp__
     reduced_expressions = dict(zip(expressions_names, reduced_values))
 
     return replacements, reduced_expressions
+
+def restore_cse_expression(expression, replacements):
+    # reversal of cse 
+
+    restored = expression # creates copy 
+
+    for temporary, replacements in reversed(replacements): # reversed as later temp depends on earlier 
+        restored = restored.subs(temporary, replacements) #.subs finds temporary variable and swaps it for it's actual mathematical replacement 
+    
+    return restored 

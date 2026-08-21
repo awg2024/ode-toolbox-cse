@@ -1,5 +1,5 @@
 #
-# XXXX.py
+# test_common_subexpression_elimination.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -20,9 +20,9 @@
 #
 
 """"
-This script provides a simple subexpression eliminiation (early dev)
+This script provides a simple subexpression eliminiation displaying the utility of CSE on a repeated expression. 
 
-After CSE implementation we need tests for the following: 
+Tests should follow for CSE: 
     • analytical solver CSE;
     
     • numerical solver CSE;
@@ -60,6 +60,6 @@ def test_basic_common_subexpression_elimination():
     temporary, temporary_expression = replacements[0]
 
     # checks, we know the expected cse outcome so we can compare. 
-    assert temporary_expression == x + y
-    assert reduced["eq1"] == temporary * a
-    assert reduced["eq2"] == temporary * b
+    assert temporary_expression == x + y, "Failed: temporary expression does not match expected (x + y)"     # Check temporary expression
+    assert reduced["eq1"] == temporary * a, "Failed: 'eq1' not reduced correctly"     # Check reduced equation 1
+    assert reduced["eq2"] == temporary * b, "Failed: 'eq2' not reduced correctly"   # Check reduced equation 2

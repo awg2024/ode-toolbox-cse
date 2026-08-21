@@ -64,7 +64,7 @@ def common_subexpression_elimination(expressions, symbol_prefix="__ode_cse_tmp__
     return replacements, reduced_expressions
 
 def restore_cse_expression(expression, replacements):
-    # reversal of cse 
+    # reversal of cse back to the original form. 
 
     restored = expression # creates copy 
 
@@ -72,3 +72,21 @@ def restore_cse_expression(expression, replacements):
         restored = restored.subs(temporary, replacements) #.subs finds temporary variable and swaps it for it's actual mathematical replacement 
     
     return restored 
+
+
+def count_operations(expressions):
+
+    return sum( # counting number of mathematical operations from the original equation 
+        int(sympy.count_ops(expression))
+        for expression in expressions
+    )
+
+def count_cse_operations(replacements, reduced_expressions): 
+
+    # count operations in the main simplified equations
+    reduced_cost = sum(int(sympy.count_ops(expr)) for expr in reduced_expressions.values())
+
+    # Count operations inside the temporary placeholder variables
+    replacement_cost = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
+
+    return replacement_cost + reduced_cost # total final cost of expressions and temporary values 

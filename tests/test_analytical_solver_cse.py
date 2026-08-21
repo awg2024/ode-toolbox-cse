@@ -1,5 +1,5 @@
 #
-# test_numeric_solver_cse.py
+# test_analytical_solver_cse.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -20,51 +20,61 @@
 #
 
 """"
-This script provides a test for numeric solver cse, can it optimise the RHS correctly,
-update expressions, preserve its structure and mathematics? 
+This script provides a test for an analytical solver cse, utilising the generate_propagator_solver()
+
+
+
 """
 
 import sympy 
 from odetoolbox.expression_optimisation import apply_cse_to_solver, restore_cse_expression
 
 
-def test_numeric_solver_cse():
+def test_analytical_solver_cse():
 
-    # define x,y as real sympy objects 
-    x,y = sympy.symbols("x y", real=True)
+    # h, tau?
+    h, tau = sympy.symbols("__h tau", real=True) 
 
-    common_term = sympy.exp(x + y) # define common term as exp^x+y sympy object 
+    common_propagator = sympy.exp(-h / tau)
 
-    # mocking solver data structure, in the expected format for sympy 
+    P_x = sympy.Symbol("__P__x__x", real=True) # defining propagators 
+    P_y = sympy.Symbol("__P__y__y", real=True)
+
     solver_dict = {
-        "solver": "numeric",
-        "state_variables": ["x", "y"],
+        "solver": "analytical",
+        "state_variables": [
+            "x",
+            "y",
+        ],
+
+        "propagators": {
+            "__P__x__x": common_propagator, # defining the RHS as the common propagator 
+            "__P__y__y": common_propagator,
+        },
+
         "update_expressions": {
-            "x": x + common_term,
-            "y": y + 2 * common_term,
+            "x": P_x * sympy.Symbol("x", real=True), # x,y real sympy objects
+            "y": P_y * sympy.Symbol("y", real=True),
         },
     }
 
-    original_expressions = dict(solver_dict["update_expressions"]) # original update expressions 
+    original_propagators = dict(solver_dict["propagators"]) # saving benchmark 
 
     result = apply_cse_to_solver(solver_dict) # apply function 
 
      
-    assert result["solver"] == "numeric", "Failed: The solver type mutated or was lost."
-    assert "cse" in result, "Failed: 'cse' key dictionary was never initialised."
-    assert "update_expressions" in result["cse"], ("Failed: 'update_expressions' was not processed or missing inside the inner cse tracker.")
+    assert result["solver"] == "analytical", "Failed: The solver type mutated or was lost."
+    
+    assert "propagators" in result["cse"]
 
-    replacements = result["cse"]["update_expressions"]
+    replacements = result["cse"]["propagators"]
 
     assert len(replacements) > 0 # checking optimisation occured
 
-    # check cse didnt remove eq
-    assert set(result["update_expressions"]) == {"x", "y"}
-
     # prove equilance to original eq
-    for variable, original in original_expressions.items():
+    for variable, original in original_propagators.items(): # very similar code to numeric test 
         
-        reduced = result["update_expressions"][variable] # Used singular 'variable'
+        reduced = result["propagators"][variable] # Used singular 'variable'
 
         # Convert the reduced string expression back to a SymPy object for testing
         restored = restore_cse_expression(reduced, replacements) 

@@ -100,23 +100,34 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
     we will have different regions of cse extraction and optimisation: update expression, propagator expression, singularity-condition branch. 
     """
 
-    # if "propagators" in solver etc.. should we have a flag? 
+    result = dict(solver)
+    result["cse"] = {}
+
+    if "propagators" in solver: # we can only search for this if we are solving analayitcally (non-linear)
+        
+        replacements, reduced = common_subexpression_elimination(
+            solver["propagators"],
+            symbol_prefix=symbol_prefix + "prop_"
+        )
+        result["propagators"] = reduced
+        result["cse"]["propagators"] = replacements
 
     if "update_expressions" in solver:
-        
-        replacements, reduced = (common_subexpression_elimination(solver["update_expressions"], symbol_prefix="__ode_cse_update"))
 
+        replacements, reduced = common_subexpression_elimination(
+            solver["update_expressions"],
+            symbol_prefix=symbol_prefix + "update_"
+        )
         result["update_expressions"] = reduced
-
-    # for a singularity-expression, they will have their own propagators and update_expressions
+        result["cse"]["update_expressions"] = replacements
 
     return result 
 
 
 def serialize_replacements(replacements):
-"""
-serializing the SymPy varible into a raw text string inside a json file so that code generator can read it and write it out as a line of C++ code 
-"""
+    """
+    serializing the SymPy varible into a raw text string inside a json file so that code generator can read it and write it out as a line of C++ code 
+    """
     return[ 
         {
             "symbol": str(symbol),

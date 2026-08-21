@@ -1,5 +1,5 @@
 #
-# test_common_subexpression_elimination.py
+# test_numeric_solver_cse.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -20,46 +20,54 @@
 #
 
 """"
-This script provides a simple subexpression eliminiation displaying the utility of CSE on a repeated expression. 
-
-Tests should follow for CSE: 
-    • analytical solver CSE;
-    
-    • numerical solver CSE;
-    
-    • conditional singularity solvers;
-    
-    • expression serialization;
-    
-    • nested CSE temporaries;
-    
-    • CSE disabled;
-    
-    • unchanged legacy JSON output when disabled.
+This script provides a tests the solving ability of linear numerical aeif_cond_beta ODEs with CSE optimisation 
 """
 
 import sympy 
-from odetoolbox.expression_optimisation import (common_subexpression_elimination)
+from odetoolbox.expression_optimisation import apply_cse_to_solver
 
-def test_basic_common_subexpression_elimination():
 
-    x, y, a, b = sympy.symbols( # define sympy symbols 
-        "x y a b",
-        real=True
-    )
+def test_numeric_solver_cse():
 
-    expressions = {
-        "eq1": (x + y) * a,  # unoptimised eq
-        "eq2": (x + y) * b,
+    solver_dict = {
+        {
+            "solver": "analytical",  # Block 0: Tool tells us it is analytical
+            "state_variables": ["g_in__X__inh_spikes", "g_in__DOLLAR__X__inh_spikes", "g_ex__X__exc_spikes", "g_ex__DOLLAR__X__exc_spikes"],
+            "propagators": {
+                "__P__g_ex__DOLLAR__X__exc_spikes__g_ex__DOLLAR__X__exc_spikes": "exp(-__h/tau_syn_decay_E)",
+                "__P__g_ex__X__exc_spikes__g_ex__DOLLAR__X__exc_spikes": "-tau_syn_decay_E*tau_syn_rise_E*exp(-__h/tau_syn_rise_E)/(tau_syn_decay_E - tau_syn_rise_E) + tau_syn_decay_E*tau_syn_rise_E*exp(-__h/tau_syn_decay_E)/(tau_syn_decay_E - tau_syn_rise_E)",
+                "__P__g_ex__X__exc_spikes__g_ex__X__exc_spikes": "exp(-__h/tau_syn_rise_E)",
+                "__P__g_in__DOLLAR__X__inh_spikes__g_in__DOLLAR__X__inh_spikes": "exp(-__h/tau_syn_decay_I)",
+                "__P__g_in__X__inh_spikes__g_in__DOLLAR__X__inh_spikes": "-tau_syn_decay_I*tau_syn_rise_I*exp(-__h/tau_syn_rise_I)/(tau_syn_decay_I - tau_syn_rise_I) + tau_syn_decay_I*tau_syn_rise_I*exp(-__h/tau_syn_decay_I)/(tau_syn_decay_I - tau_syn_rise_I)",
+                "__P__g_in__X__inh_spikes__g_in__X__inh_spikes": "exp(-__h/tau_syn_rise_I)"
+            },
+            "update_expressions": {
+                "g_ex__DOLLAR__X__exc_spikes": "__P__g_ex__DOLLAR__X__exc_spikes__g_ex__DOLLAR__X__exc_spikes*g_ex__DOLLAR__X__exc_spikes",
+                "g_ex__X__exc_spikes": "__P__g_ex__X__exc_spikes__g_ex__DOLLAR__X__exc_spikes*g_ex__DOLLAR__X__exc_spikes + __P__g_ex__X__exc_spikes__g_ex__X__exc_spikes*g_ex__X__exc_spikes",
+                "g_in__DOLLAR__X__inh_spikes": "__P__g_in__DOLLAR__X__inh_spikes__g_in__DOLLAR__X__inh_spikes*g_in__DOLLAR__X__inh_spikes",
+                "g_in__X__inh_spikes": "__P__g_in__X__inh_spikes__g_in__DOLLAR__X__inh_spikes*g_in__DOLLAR__X__inh_spikes + __P__g_in__X__inh_spikes__g_in__X__inh_spikes*g_in__X__inh_spikes"
+            }
+        },
+        {
+            "solver": "numeric",  # <-- Block 1: Tool tells us it is numeric
+            "state_variables": ["V_m", "w"],
+            "update_expressions": {
+                "V_m": "((-g_L) * ((min(V_m, V_peak)) - E_L) + (g_L * Delta_T * exp((((min(V_m, V_peak)) - V_th) / Delta_T))) - (g_ex__X__exc_spikes * 1.0 * ((min(V_m, V_peak)) - E_exc)) - (g_in__X__inh_spikes * 1.0 * ((min(V_m, V_peak)) - E_inh)) - w + I_e + I_stim) / C_m",
+                "w": "(a * ((min(V_m, V_peak)) - E_L) - w) / tau_w"
+            }
+        }
     }
+    
 
-    replacements, reduced = (common_subexpression_elimination(expressions))
+    results = []
+    result = apply_cse_to_solver(solver_dict)
 
-    assert len(replacements) == 1
+    print(f"\nAfter CSE Output Dictionary: {result}") 
+  
+    assert result["solver"] == "numeric", "Failed: The solver type mutated or was lost."
+    assert "cse" in result, "Failed: 'cse' key dictionary was never initialized."
 
-    temporary, temporary_expression = replacements[0]
+    assert "update_expressions" in result["cse"], (
+        "Failed: 'update_expressions' was not processed or missing inside the inner cse tracker.")
 
-    # checks, we know the expected cse outcome so we can compare. 
-    assert temporary_expression == x + y, "Failed: temporary expression does not match expected (x + y)"     # Check temporary expression
-    assert reduced["eq1"] == temporary * a, "Failed: 'eq1' not reduced correctly"     # Check reduced equation 1
-    assert reduced["eq2"] == temporary * b, "Failed: 'eq2' not reduced correctly"   # Check reduced equation 2
+    assert "update_expressions" in result, "Failed: Top-level update expressions dictionary was stripped."

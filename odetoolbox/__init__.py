@@ -31,7 +31,7 @@ from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _find_
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
-from expression_optimisation import apply_cse_to_solver
+from .expression_optimisation import apply_cse_to_solver
 
 
 try:
@@ -223,7 +223,13 @@ def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
     return False
 
 
-def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_solver: bool = False, disable_singularity_detection: bool = False, disable_singularity_mitigation: bool = False, use_alternative_expM: bool = False, preserve_expressions: Union[bool, Iterable[str]] = False, log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShapes, List[Shape]]:
+def _analysis(indict, disable_stiffness_check: bool = False,
+disable_analytic_solver: bool = False,
+disable_singularity_detection: bool = False,
+disable_singularity_mitigation: bool = False, 
+use_alternative_expM: bool = False, preserve_expressions: Union[bool, Iterable[str]] = False, 
+enable_cse: bool = False, 
+log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShapes, List[Shape]]:
     r"""
     Like analysis(), but additionally returns ``shape_sys`` and ``shapes``.
 
@@ -332,6 +338,30 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
 
         solvers_json.append(solver_json)
 
+        # 
+        # perform cse 
+        #
+
+        if enable_cse:  # if cse flag is enabled 
+            for idx, solver_dict in enumerate(solvers_json):
+                print(f"\n--- Solver Block [{idx}] | Type: {solver_dict.get('solver')} ---")
+                
+                if "update_expressions" in solver_dict: # search for update_expressions in json 
+                    print("Target Update Expressions:")
+                    for var, expr in solver_dict["update_expressions"].items(): # extract RHS 
+                        logging.getLogger(__name__).info(f"  {var} = {expr}")
+                        
+                if "propagator_expressions" in solver_dict:
+                    print("Target Propagator Expressions:")
+                    for var, expr in solver_dict["propagators"].items(): # extract RHS 
+                        logging.getLogger(__name__).info(f"  {var} = {expr}")
+
+            for i, solver_dict in enumerate(solvers_json): 
+                solvers_json[i] = apply_cse_to_solver(solver_dict) 
+
+
+
+      
     #
     #   copy the initial values from the input to the output for convenience; convert to numeric values
     #
@@ -375,19 +405,8 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
                     solver_json["parameters"][param_name] = str(sympy_expr)
 
     
-    # enable cse flag 
-    if enable_cse: 
-
-        # solver_json elements are SymPy objects 
-        for i, solver_json in enumerate(solver_json):
-
-            # i think we should maybe have another flag for what you want optimised? 
-            solver_json[i] = apply_cse_to_solver(solver_json) 
-                
-
-    
     #
-    #   convert expressions from sympy to string (cse implementation)
+    #   convert expressions from sympy to string
     #   
     #
 
@@ -463,7 +482,15 @@ def _init_logging(log_level: Union[str, int] = logging.WARNING):
     logger.setLevel(log_level)
 
 
-def analysis(indict, disable_stiffness_check: bool = False, disable_analytic_solver: bool = False, disable_singularity_detection: bool = False, disable_singularity_mitigation: bool = False, use_alternative_expM: bool = False, preserve_expressions: Union[bool, Iterable[str]] = False, log_level: Union[str, int] = logging.WARNING) -> List[Dict]:
+def analysis(indict, disable_stiffness_check: bool = False,
+ disable_analytic_solver: bool = False, 
+ disable_singularity_detection: bool = False, 
+ disable_singularity_mitigation: bool = False, 
+ use_alternative_expM: bool = False, 
+ enable_cse: bool = False, 
+ preserve_expressions: Union[bool, Iterable[str]] = False, 
+ 
+ log_level: Union[str, int] = logging.WARNING) -> List[Dict]:
     r"""
     The main entry point of the ODE-toolbox API.
 
@@ -486,6 +513,6 @@ def analysis(indict, disable_stiffness_check: bool = False, disable_analytic_sol
                         disable_singularity_mitigation=disable_singularity_mitigation,
                         use_alternative_expM=use_alternative_expM,
                         preserve_expressions=preserve_expressions,
-                        log_level=log_level,
-                        enable_cse: bool = False)
+                        enable_cse=enable_cse,
+                        log_level=log_level)
     return d

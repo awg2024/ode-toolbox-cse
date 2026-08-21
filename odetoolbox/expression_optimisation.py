@@ -38,29 +38,38 @@ import sympy
 
 def common_subexpression_elimination(expressions, symbol_prefix="__ode_cse_tmp__"):
     """
-    custom wrapper to perform common subexpression elimination across mapping of a named sympy expression
+    custom wrapper to perform common subexpression elimination across mapping of a 
+    named sympy expression
     """
 
     if not expressions: # if expressions are empty 
         return [], {}
     
-    #match values with names
+    # expression names in specific order 
     expressions_names = list(expressions.keys()) 
-    expressions_values = [expressions[name] for name in expressions_names] # sympy accepts ordered list of mathematical expressions 
-    # splitting variable names and raw sympy math trees 
 
-    temporary_symbols = sympy.numbered_symbols(symbol_prefix) # infinite generator for the temp local variables to hold isolated math subexpressions 
+    # sympy accepts ordered list of mathematical expressions in same order as expression_names
+    expressions_values = [expressions[name] for name in expressions_names] 
+
+    # check for sympy objects 
+    if not all(isinstance(expression, sympy.Basic) for expression in expressions_values):
+        raise TypeError("CSE expects Sympy objects. String serialisation has not occured. ")
+
+    #  infinite generator for the temp local variables to hold isolated math subexpressions 
+    temporary_symbols = sympy.numbered_symbols(symbol_prefix) 
 
     # perform cse
-    replacements, reduced_values = sympy.cse(
+    replacements, reduced_values = sympy.cse( 
         expressions_values, # 
         symbols=temporary_symbols,
         optimizations=None, 
-        order="canonical" # forces ordering deterministically 
+        order="canonical" # forces ordering deterministically (e.g., A relies on B)
     )
 
+    # fuse cse expressions with values, maintain order of eq. 
     reduced_expressions = dict(zip(expressions_names, reduced_values))
 
+    # replacement is returned as tuples where each tupe contains the temp var_name with the maths block
     return replacements, reduced_expressions
 
 def restore_cse_expression(expression, replacements):
@@ -68,8 +77,8 @@ def restore_cse_expression(expression, replacements):
 
     restored = expression # creates copy 
 
-    for temporary, replacements in reversed(replacements): # reversed as later temp depends on earlier 
-        restored = restored.subs(temporary, replacements) #.subs finds temporary variable and swaps it for it's actual mathematical replacement 
+    for temporary, replacement_expression in reversed(replacements): # reversed as later temp depends on earlier 
+        restored = restored.subs(temporary, replacement_expression) #.subs finds temporary variable and swaps it for it's actual mathematical replacement 
     
     return restored 
 
@@ -107,32 +116,29 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
         
         replacements, reduced = common_subexpression_elimination(
             solver["propagators"],
-            symbol_prefix=symbol_prefix + "prop_"
-        )
-        result["propagators"] = reduced
-        result["cse"]["propagators"] = replacements
+            symbol_prefix=symbol_prefix + "prop_")
+
+        
+         # Serialize replacement symbols to raw lists of string arrays
+        result["propagators"] = {var: str(expr) for var, expr in reduced.items()}
+        result["cse"]["propagators"] = serialize_replacements(replacements)
 
     if "update_expressions" in solver:
 
         replacements, reduced = common_subexpression_elimination(
             solver["update_expressions"],
-            symbol_prefix=symbol_prefix + "update_"
-        )
-        result["update_expressions"] = reduced
-        result["cse"]["update_expressions"] = replacements
+            symbol_prefix=symbol_prefix + "update_")
+        
+         # Serialize replacement symbols to raw lists of string arrays
+        result["update_expressions"] = {var: str(expr) for var, expr in reduced.items()}
+        result["cse"]["update_expressions"] = serialize_replacements(replacements)
+
 
     return result 
 
 
-def serialize_replacements(replacements):
-    """
-    serializing the SymPy varible into a raw text string inside a json file so that code generator can read it and write it out as a line of C++ code 
-    """
-    return[ 
-        {
-            "symbol": str(symbol),
-            "expression": str(expression),
-        }
-        for symbol, expression in replacements 
-    ]
+def serialize_replacements(replacements_list):
+    """Converts SymPy replacement tuples into standard JSON-safe text strings."""
+    # Takes [(Symbol, Expression), ...] -> [["Symbol_Name", "Expression_Text"], ...]
+    return [[str(sym), str(expr)] for sym, expr in replacements_list]
 

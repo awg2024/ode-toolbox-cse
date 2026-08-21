@@ -197,7 +197,6 @@ def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
     #dependency checker. looks for specific symbol names and checks if its used in the processed solver structural json.
     #  searching update_expressions, propagators, conditions
     
-     # !! potential place to think about cse implementation here 
     if "update_expressions" in solver_json.keys():
         for sym, expr in solver_json["update_expressions"].items():
             if param_name in [str(sym) for sym in list(expr.atoms())]:
@@ -338,29 +337,6 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
 
         solvers_json.append(solver_json)
 
-        # 
-        # perform cse 
-        #
-
-        if enable_cse:  # if cse flag is enabled 
-            for idx, solver_dict in enumerate(solvers_json):
-                print(f"\n--- Solver Block [{idx}] | Type: {solver_dict.get('solver')} ---")
-                
-                if "update_expressions" in solver_dict: # search for update_expressions in json 
-                    print("Target Update Expressions:")
-                    for var, expr in solver_dict["update_expressions"].items(): # extract RHS 
-                        logging.getLogger(__name__).info(f"  {var} = {expr}")
-                        
-                if "propagator_expressions" in solver_dict:
-                    print("Target Propagator Expressions:")
-                    for var, expr in solver_dict["propagators"].items(): # extract RHS 
-                        logging.getLogger(__name__).info(f"  {var} = {expr}")
-
-            for i, solver_dict in enumerate(solvers_json): 
-                solvers_json[i] = apply_cse_to_solver(solver_dict) 
-
-
-
       
     #
     #   copy the initial values from the input to the output for convenience; convert to numeric values
@@ -402,9 +378,26 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                     for var in sympy_expr.atoms():
                         _check_numerical_issue(var, check_infty=False)
 
-                    solver_json["parameters"][param_name] = str(sympy_expr)
+                    # appending parameter discovery to solver json
+                    solver_json["parameters"][param_name] = str(sympy_expr) 
 
-    
+    # 
+    # perform cse after parameter discovery whilst expressions are Sympy objects
+    #
+
+    if enable_cse:  # if cse flag is enabled 
+
+        for idx, solver_dict in enumerate(solvers_json): # for each position in the expression
+            
+            logging.getLogger(__name__).debug(
+                "Applying CSE to solver block %d (%s)",
+                idx,  
+                solver_dict.get("solver")) # analytical vs numerical
+
+            # perform cse returns "cse" block in dict 
+            solvers_json[idx] = apply_cse_to_solver(solver_dict)
+
+
     #
     #   convert expressions from sympy to string
     #   
@@ -465,7 +458,11 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                         cond_solver["propagators"][sym] = str(expr)
 
     logging.getLogger(__name__).info("Final output result:")
-    logging.getLogger(__name__).info(json.dumps(solvers_json, indent=4, sort_keys=True))
+  
+    logging.getLogger(__name__).info(json.dumps(solvers_json, indent=4, sort_keys=True, default=lambda o: f"__UNSERIALIZED_{type(o).__name__}__({str(o)})"))
+
+
+
 
     return solvers_json, shape_sys, shapes
 

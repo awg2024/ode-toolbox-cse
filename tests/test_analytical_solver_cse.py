@@ -32,15 +32,15 @@ from odetoolbox.expression_optimisation import apply_cse_to_solver, restore_cse_
 
 def test_analytical_solver_cse():
 
-    # h, tau?
+    
+    # This defines the standard physical time step parameter (__h) and an exponential decay time constant (tau).
     h, tau = sympy.symbols("__h tau", real=True) 
-
-    common_propagator = sympy.exp(-h / tau)
+    common_propagator = sympy.exp(-h / tau) # common propagator found across neuronal models 
 
     P_x = sympy.Symbol("__P__x__x", real=True) # defining propagators 
     P_y = sympy.Symbol("__P__y__y", real=True)
 
-    solver_dict = {
+    solver_dict = { # mocking an analytical matrix layout 
         "solver": "analytical",
         "state_variables": [
             "x",

@@ -44,6 +44,10 @@ def test_cse_preserves_expression():
 
     after = count_cse_operations(replacements, reduced) # count number of mathematical operations for cse eq 
 
+    # Print blocks for manual validation (visible pytest -s)
+    print(f"\n Operations Before CSE: {before}")
+    print(f" Operations After CSE: {after}")
+
     # enforce logic that optimisation must decrease operations 
     assert after < before, f"Optimisation failed, cost did not decrease. Before: {before}. After: {after}"
 

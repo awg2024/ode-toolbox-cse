@@ -31,6 +31,8 @@ from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _find_
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
+from expression_optimisation import apply_cse_to_solver
+
 
 try:
     import pygsl.odeiv as odeiv
@@ -372,6 +374,18 @@ def _analysis(indict, disable_stiffness_check: bool = False, disable_analytic_so
 
                     solver_json["parameters"][param_name] = str(sympy_expr)
 
+    
+    # enable cse flag 
+    if enable_cse: 
+
+        # solver_json elements are SymPy objects 
+        for i, solver_json in enumerate(solver_json):
+
+            # i think we should maybe have another flag for what you want optimised? 
+            solver_json[i] = apply_cse_to_solver(solver_json) 
+                
+
+    
     #
     #   convert expressions from sympy to string (cse implementation)
     #   
@@ -461,6 +475,7 @@ def analysis(indict, disable_stiffness_check: bool = False, disable_analytic_sol
     :param use_alternative_expM: If :python:`False`, use the sympy function ``sympy.exp`` to compute the matrix exponential. If :python:`True`, use an alternative function (see :py:func:`odetoolbox.sympy_helpers.expMt` for details). This can be useful as calls to ``sympy.exp`` can sometimes take a very large amount of time.
     :param preserve_expressions: Set to True, or a list of strings corresponding to individual variable names, to disable internal rewriting of expressions, and return same output as input expression where possible. Only applies to variables specified as first-order differential equations.
     :param log_level: Sets the logging threshold. Logging messages which are less severe than ``log_level`` will be ignored. Log levels can be provided as an integer or string, for example "INFO" (more messages) or "WARN" (fewer messages). For a list of valid logging levels, see https://docs.python.org/3/library/logging.html#logging-levels
+    :param enable_cse: Boolean flag set to False. If enabled it will perform sub-expression elimination on update_expression, propagators and singularity conditions of the generated .cpp nestml file. 
 
     :return: The result of the analysis. For details, see https://ode-toolbox.readthedocs.io/en/latest/index.html#output
     """
@@ -471,5 +486,6 @@ def analysis(indict, disable_stiffness_check: bool = False, disable_analytic_sol
                         disable_singularity_mitigation=disable_singularity_mitigation,
                         use_alternative_expM=use_alternative_expM,
                         preserve_expressions=preserve_expressions,
-                        log_level=log_level)
+                        log_level=log_level,
+                        enable_cse: bool = False)
     return d

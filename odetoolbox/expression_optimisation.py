@@ -90,3 +90,38 @@ def count_cse_operations(replacements, reduced_expressions):
     replacement_cost = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
 
     return replacement_cost + reduced_cost # total final cost of expressions and temporary values 
+
+
+def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use downstream of this value belongs to a cse optimisation, enabling a clean variable handling
+    """
+    It's import to understand ODE toolbox output structure (generate_solver_dict_based_on_propagator_matrix(), generate_numeric_solver())
+    If we extract out temporary values from the entirity of nestml at once we would lead to crashes in the ODEs since these equations may be updated differently 
+    and at different steps therefore the temporary value would have no where to live. 
+    we will have different regions of cse extraction and optimisation: update expression, propagator expression, singularity-condition branch. 
+    """
+
+    # if "propagators" in solver etc.. should we have a flag? 
+
+    if "update_expressions" in solver:
+        
+        replacements, reduced = (common_subexpression_elimination(solver["update_expressions"], symbol_prefix="__ode_cse_update"))
+
+        result["update_expressions"] = reduced
+
+    # for a singularity-expression, they will have their own propagators and update_expressions
+
+    return result 
+
+
+def serialize_replacements(replacements):
+"""
+serializing the SymPy varible into a raw text string inside a json file so that code generator can read it and write it out as a line of C++ code 
+"""
+    return[ 
+        {
+            "symbol": str(symbol),
+            "expression": str(expression),
+        }
+        for symbol, expression in replacements 
+    ]
+

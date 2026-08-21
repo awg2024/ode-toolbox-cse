@@ -1,0 +1,34 @@
+{
+  "dynamics": [
+    {
+      "expression" : "g_in = (e/tau_syn_in)*t*exp(-1/tau_syn_in*t)"
+    },
+    {
+      "expression" : "g_ex = (e/tau_syn_ex)*t*exp(-1/tau_syn_ex*t)"
+    },
+    {
+      "expression": "V_m' = (-g_L * (V_m - E_L) - g_ex * (V_m - E_ex) - g_in * (V_m - E_in) + I_stim + I_e) / C_m"
+    },
+    {
+      "expression": "theta_1' = -theta_1 / tau_theta_1"
+    },
+    {
+      "expression": "theta_2' = -theta_2 / tau_theta_2"
+    }
+  ],
+
+  "parameters": {
+    "g_L": "10.0E-9",
+    "C_m": "200.0E-12",
+    "E_L": "-70.0E-3",
+    "E_ex": "0.0",
+    "E_in": "-80.0E-3",
+    "tau_syn_ex": "2.0E-3",
+    "tau_syn_in": "5.0E-3",
+    "tau_theta_1": "10.0E-3",
+    "tau_theta_2": "100.0E-3",
+    "I_e": "0.0",
+    "I_stim": "0.0"
+  }
+}
+

@@ -109,19 +109,20 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
     we will have different regions of cse extraction and optimisation: update expression, propagator expression, singularity-condition branch. 
     """
 
-    result = dict(solver)
-    result["cse"] = {}
 
-    if "propagators" in solver: # we can only search for this if we are solving analayitcally (non-linear)
+    result = dict(solver)
+    cse_tracking_data = {}
+   
+
+    if "propagators" in solver: # search for analytically solved ODE (non-linear)
         
         replacements, reduced = common_subexpression_elimination(
             solver["propagators"],
             symbol_prefix=symbol_prefix + "prop_")
 
-        
          # Serialize replacement symbols to raw lists of string arrays
         result["propagators"] = {var: str(expr) for var, expr in reduced.items()}
-        result["cse"]["propagators"] = serialize_replacements(replacements)
+        cse_tracking_data["propagators"] = serialize_replacements(replacements)
 
     if "update_expressions" in solver:
 
@@ -131,10 +132,10 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
         
          # Serialize replacement symbols to raw lists of string arrays
         result["update_expressions"] = {var: str(expr) for var, expr in reduced.items()}
-        result["cse"]["update_expressions"] = serialize_replacements(replacements)
+        cse_tracking_data["update_expressions"] = serialize_replacements(replacements)
 
 
-    return result 
+    return result, cse_tracking_data
 
 
 def serialize_replacements(replacements_list):

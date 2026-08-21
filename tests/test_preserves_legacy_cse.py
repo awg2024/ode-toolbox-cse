@@ -1,5 +1,5 @@
 #
-# test_cse_disabled_preserves_legacy.py
+# test_disabled_preserves_legacy_cse.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -18,6 +18,10 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 #
+"""
+Existing users upstream should notice no difference in their output. 
+"""
+
 
 import pytest
 import odetoolbox
@@ -37,13 +41,13 @@ def test_cse_disabled_preserves_legacy():
         ]    
     }
 
-    default_result = odetoolbox.analysis(
+    default_result = odetoolbox.analysis( # default cse is off by default 
         indict,
         disable_stiffness_check=True,
-        disable_singularity_detection=True,
+        disable_singularity_detection=True, 
     )
 
-    explicitly_disabled_result = odetoolbox.analysis(
+    explicitly_disabled_result = odetoolbox.analysis( # explicitly false cse 
         indict,
         disable_stiffness_check=True,
         disable_singularity_detection=True,

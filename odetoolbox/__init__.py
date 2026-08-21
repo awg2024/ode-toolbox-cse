@@ -387,6 +387,9 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
 
     if enable_cse:  # if cse flag is enabled 
 
+        # keep a seperate module array to trace replacements for verification
+        all_pipeline_cse_metadata = []
+
         for idx, solver_dict in enumerate(solvers_json): # for each position in the expression
             
             logging.getLogger(__name__).debug(
@@ -394,10 +397,16 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                 idx,  
                 solver_dict.get("solver")) # analytical vs numerical
 
-            # perform cse returns "cse" block in dict 
-            solvers_json[idx] = apply_cse_to_solver(solver_dict)
+            # applying cse
+            optimized_block, tracking_meta = apply_cse_to_solver(solver_dict)
 
+            # Save optimised block back to solvers_json, keep cpython safe 
+            solvers_json[idx] = optimized_block
+            
+            # Save metadata completely outside the json generation pathway
+            all_pipeline_cse_metadata.append(tracking_meta)
 
+            
     #
     #   convert expressions from sympy to string
     #   

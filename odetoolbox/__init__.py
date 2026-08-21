@@ -458,8 +458,15 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                         cond_solver["propagators"][sym] = str(expr)
 
     logging.getLogger(__name__).info("Final output result:")
-  
     logging.getLogger(__name__).info(json.dumps(solvers_json, indent=4, sort_keys=True, default=lambda o: f"__UNSERIALIZED_{type(o).__name__}__({str(o)})"))
+
+    # Serialise cse metadata, although this was done in solve()? 
+    #if "cse" in solver_json:
+    #    for region, replacement in (
+    #      solver_json["cse"].items():
+    #
+    #        sovler_json["cse"][region] = (serialize_replacements(replacement))
+    #    )
 
 
 

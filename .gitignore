@@ -2,6 +2,7 @@
 .cache
 .eggs
 .idea
+.venv/
 build
 dist
 odetoolbox.egg-info

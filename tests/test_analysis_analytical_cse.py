@@ -31,9 +31,10 @@ import sympy
 from odetoolbox.expression_optimisation import apply_cse_to_solver, restore_cse_expression
 from .context import odetoolbox
 def test_analysis_analytical_cse():
+
     indict = {
-        "dynamics": [
-            {
+        "dynamics": [ # mocking indict that will be passed into _analysis 
+            { 
                 "expression": "x' = -x / tau",
                 "initial_value": "1",
             },
@@ -44,33 +45,28 @@ def test_analysis_analytical_cse():
         ]
     }
 
-    # FIXED: Capture the true 3-element tuple returned by analysis()
-    solvers_list = odetoolbox.analysis(
+    result = odetoolbox.analysis(
         indict, 
         disable_stiffness_check=True,
         disable_singularity_detection=True, 
         enable_cse=True
     )
 
-    # Extract our single target analytical block 
-    assert len(solvers_list) == 1 
-    solver = solvers_list[0]
+    # verification of dictionary and structure 
+    assert len(result) == 1
+    solver = result[0]
+    assert solver["solver"] == "analytical"
+    assert "propagators" in solver
+    assert "cse" in solver
+    assert "propagators" in solver["cse"]
 
-    assert solver['solver'] == 'analytical'
-    assert 'propagators' in solver
+    # verification of optimisation and serialisation 
+    replacements = solver["cse"]["propagators"]
+    assert len(replacements) > 0 # ensure that optimisation has occured 
+    
+    # To this (Index 0 Symbol name, Index 1 Math expression) - ensuring serialisation 
+    replacement = replacements[0]
 
-    assert "cse" in solver, "Failed: 'cse' key missing from solver dict."
-    assert "propagators" in solver["cse"], "Failed: Propagator tracking data missing."
+    assert isinstance(replacement["symbol"], str)
 
-    propagator_replacements = solver["cse"]["propagators"]
-
-    # Since propagator_replacements is a safe dictionary {"__ode_cse_prop_0": "exp(-__h/tau)"}
-    assert len(propagator_replacements) > 0, "Failed: No subexpressions were optimized."
-
-    # FIXED: Safely convert dictionary tracks to an indexed list of items
-    replacements_list = list(propagator_replacements.items())
-    first_replacement = replacements_list[0] # Yields a cleanly indexed ("Symbol", "Expression") tuple
-
-    assert isinstance(first_replacement[0], str), "Failed: The replacement symbol name is not a string!"
-    assert isinstance(first_replacement[1], str), "Failed: The replacement expression body is not a string!"
-    print(f"\n [PASSED] Successfully verified analytical CSE variable: {first_replacement[0]} = {first_replacement[1]}")
+    assert isinstance(replacement["expression"], str)

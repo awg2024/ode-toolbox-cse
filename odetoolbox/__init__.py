@@ -31,7 +31,7 @@ from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _find_
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
-from .expression_optimisation import apply_cse_to_solver
+from .expression_optimisation import apply_cse_to_solver, serialize_replacements
 
 
 try:
@@ -387,26 +387,16 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
 
     if enable_cse:  # if cse flag is enabled 
 
-        # keep a seperate module array to trace replacements for verification
-        all_pipeline_cse_metadata = []
-
-        for idx, solver_dict in enumerate(solvers_json): # for each position in the expression
+        for idx, solver_dict in enumerate(solvers_json): # for each idx and equation in the expression
             
             logging.getLogger(__name__).debug(
                 "Applying CSE to solver block %d (%s)",
                 idx,  
                 solver_dict.get("solver")) # analytical vs numerical
-
-            # applying cse
-            optimized_block, tracking_meta = apply_cse_to_solver(solver_dict)
-
-            # Save optimised block back to solvers_json, keep cpython safe 
-            solvers_json[idx] = optimized_block
             
-            # Save metadata completely outside the json generation pathway
-            all_pipeline_cse_metadata.append(tracking_meta)
-
-            
+            # pass solver dict to cse 
+            solvers_json[idx] = (apply_cse_to_solver(solver_dict))
+     
     #
     #   convert expressions from sympy to string
     #   
@@ -465,20 +455,14 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                 if "propagators" in cond_solver:
                     for sym, expr in cond_solver["propagators"].items():
                         cond_solver["propagators"][sym] = str(expr)
+                        
+    # Serialise cse metadata, is other objects serialized? 
+    if "cse" in solver_json:
+        for region, replacements in (solver_json["cse"].items()):
+            solver_json["cse"][region] = (serialize_replacements(replacements))
 
     logging.getLogger(__name__).info("Final output result:")
-    logging.getLogger(__name__).info(json.dumps(solvers_json, indent=4, sort_keys=True, default=lambda o: f"__UNSERIALIZED_{type(o).__name__}__({str(o)})"))
-
-    # Serialise cse metadata, although this was done in solve()? 
-    #if "cse" in solver_json:
-    #    for region, replacement in (
-    #      solver_json["cse"].items():
-    #
-    #        sovler_json["cse"][region] = (serialize_replacements(replacement))
-    #    )
-
-
-
+    json.dumps(solvers_json, indent=4, sort_keys=True)   # default hides bugs 
 
     return solvers_json, shape_sys, shapes
 

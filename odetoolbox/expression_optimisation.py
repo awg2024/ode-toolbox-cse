@@ -102,44 +102,59 @@ def count_cse_operations(replacements, reduced_expressions):
 
 
 def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use downstream of this value belongs to a cse optimisation, enabling a clean variable handling
+    
     """
-    It's import to understand ODE toolbox output structure (generate_solver_dict_based_on_propagator_matrix(), generate_numeric_solver())
-    If we extract out temporary values from the entirity of nestml at once we would lead to crashes in the ODEs since these equations may be updated differently 
-    and at different steps therefore the temporary value would have no where to live. 
-    we will have different regions of cse extraction and optimisation: update expression, propagator expression, singularity-condition branch. 
-    """
+    Apply CSE independently to the different execution regions of an ODE-toolbox solver (e.g., update, propagators)
 
+    All expressions remain SymPy objects here. Serialization happens later in _analysis() for a safe JSON-safe solver dict. 
+    """
 
     result = dict(solver)
-    cse_tracking_data = {}
-   
 
-    if "propagators" in solver: # search for analytically solved ODE (non-linear)
+    cse_data = {}
+    
+    # analytical propagator solver region (non-linear ODE)
+    if "propagators" in solver: 
         
         replacements, reduced = common_subexpression_elimination(
             solver["propagators"],
             symbol_prefix=symbol_prefix + "prop_")
 
-         # Serialize replacement symbols to raw lists of string arrays
-        result["propagators"] = {var: str(expr) for var, expr in reduced.items()}
-        cse_tracking_data["propagators"] = serialize_replacements(replacements)
+         # keep sympy object here 
+        result["propagators"] = reduced
 
+        if replacements:
+            cse_data["propagators"] = (replacements)
+
+    # numerical state update region (linear ODE)  
     if "update_expressions" in solver:
 
         replacements, reduced = common_subexpression_elimination(
             solver["update_expressions"],
             symbol_prefix=symbol_prefix + "update_")
         
-         # Serialize replacement symbols to raw lists of string arrays
-        result["update_expressions"] = {var: str(expr) for var, expr in reduced.items()}
-        cse_tracking_data["update_expressions"] = serialize_replacements(replacements)
+        # keep sympy object here 
+        result["update_expressions"] = reduced
+
+        if replacements:
+            cse_data["update_expressions"] = (replacements)
+
+    # Only add CSE metadata when something was actually extracted.
+    if cse_data:
+        result["cse"] = cse_data
+    
+    
+    return result
 
 
-    return result, cse_tracking_data
 
+def serialize_replacements(replacements):
+    """
+    Convert CSE replacement tuples to JSON-safe data
+    """
 
-def serialize_replacements(replacements_list):
-    """Converts SymPy replacement tuples into standard JSON-safe text strings."""
-    # Takes [(Symbol, Expression), ...] -> [["Symbol_Name", "Expression_Text"], ...]
-    return [[str(sym), str(expr)] for sym, expr in replacements_list]
+    return [{
+            "symbol": str(symbol),
+            "expression": str(expression)}
+            for symbol, expression in replacements]
 

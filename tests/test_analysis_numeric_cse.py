@@ -28,12 +28,11 @@ from .context import odetoolbox
 import sympy 
 from odetoolbox.expression_optimisation import apply_cse_to_solver, restore_cse_expression
 
-
 def test_analysis_numeric_cse():
 
     # mocking a .json from a model description file 
     indict = {
-        "dynamics": [ # 
+        "dynamics": [ #  indict that would be passed into _analysis 
             {
                 "expression":
                     "x' = x + exp(x + y)", # nonlinear 
@@ -69,9 +68,15 @@ def test_analysis_numeric_cse():
     assert len(replacements) > 0 # ensure that optimisation has occured 
     
     # To this (Index 0 Symbol name, Index 1 Math expression) - ensuring serialisation 
-    assert isinstance(replacements[0][0], str), "Failed: The replacement symbol is not a string!"
-    assert isinstance(replacements[0][1], str), "Failed: The replacement expression is not a string!"
-    assert isinstance(solver["update_expressions"]["x"],str)
-    assert isinstance(solver["update_expressions"]["y"],str)
+    replacement = replacements[0]
+
+    assert isinstance(replacement["symbol"], str)
+
+    assert isinstance(replacement["expression"], str)
+
+    assert isinstance(solver["update_expressions"]["x"], str)
+
+    assert isinstance(solver["update_expressions"]["y"], str)
+
 
 

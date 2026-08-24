@@ -193,13 +193,10 @@ def _serialize_replacements_metadata(region):
     if not "cse" in region:
         return
     
-    for expression_region, replacements in (region["cse"].items()):
+    for expression_region, replacements in (list(region["cse"].items())):
 
         # call the indivudal serialise functon once within the solver 
-        region["cse"[expression_region] = serialize_replacements(replacements)]
-
-
-
+        region["cse"][expression_region] = serialize_replacements(replacements)
 
 def _apply_cse_to_expression_region(region, symbol_prefix):
 
@@ -219,7 +216,7 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         all_math_expressions.extend(region["propagators"].values())
     
     if region.get("update_expressions"):
-        all_math_expressions.extend(region["propagators"].values())
+        all_math_expressions.extend(region["update_expressions"].values())
     
 
     # safety check before running cse in singularity
@@ -232,7 +229,7 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         print(f"Hidden nest Sympy.Piecewise logic {symbol_prefix}")
         return result
 
-    if region.get("propagators")
+    if region.get("propagators"):
         replacements, reduced = _run_profitable_cse(region["propagators"], symbol_prefix + "prop_")
         
         if replacements: 
@@ -240,7 +237,7 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
             cse_data["propagators"] = replacements 
 
     
-    if region.get("update_expressions")
+    if region.get("update_expressions"):
         replacements, reduced = _run_profitable_cse(region["update_expressions"], symbol_prefix + "update_")
         
         if replacements: 

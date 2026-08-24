@@ -365,7 +365,7 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
             solver_json["parameters"] = {}
             for param_name, param_expr in indict["parameters"].items():
                 # only make parameters appear in a solver if they are actually used there
-                if symbol_appears_in_any_expr(sym, solver_json):
+                if symbol_appears_in_any_expr(sym, solver_json): # WARNING should sym -> param_name?
                     sympy_expr = _sympy_parse_real(param_expr, global_dict=Shape._sympy_globals)
 
                     # validate output for numerical problems -- note that we skip checking for infinity here as some parameters (like "V_max") could be legitimately defined as infinity

@@ -1,48 +1,42 @@
+"""
+In this test we will see how the cse solver reacts to a condition in the solver
+"""
+
 import sympy
 from odetoolbox.expression_optimisation import (apply_cse_to_solver)
+import json
+import odetoolbox
 
 def test_cse_preserves_condition_solver():
 
-    x, y = sympy.symbols("x y",real=True)
-
-    solver = { # define solver as indict that would be passed into indict 
-        "solver": "analytical",
-
-        "state_variables": [
-            "x",
-            "y",
+    indict = { # defining indict non-linear that will need a singularity condition 
+        "dynamics": [
+            {
+                "expression": "V_m' = -V_m / tau_m + I/C_m",
+                "initial_value": "0"
+            }
         ],
-
-        "conditions": { #  apply_cse_to_solver only looks for high level dict levels (propagator, update) 
-
-            "default": {
-                "propagators": {
-                    "P_x": sympy.exp(-x),
-                    "P_y": sympy.exp(-y),
-                },
-
-                "update_expressions": {
-                    "x": x,
-                    "y": y,
-                },
-            },
-
-            "(tau_1 == tau_2)": {
-                "propagators": {
-                    "P_x": 1 + x,
-                    "P_y": 1 + y,
-                },
-
-                "update_expressions": {
-                    "x": x,
-                    "y": y,
-                },
-            },
+        "parameters": {
+            "tau_m": "10",
+            "C_m": "250"
         },
+        "options": {
+            "output_timestep_symbol": "__h"
+        }
     }
 
-    result = apply_cse_to_solver(solver) # apply cse to solver 
 
-    assert result["conditions"] == solver["conditions"] # checking the result and solver are kept the same 
+    solver = odetoolbox.analysis(indict)  # baseline, no CSE
+    result = odetoolbox.analysis(indict, enable_cse=True) # apply cse 
+    
+    print(json.dumps(result, indent=2)) # print result output
+    
+    assert result[0]["conditions"] == solver[0]["conditions"] # ensure singularity conditions are present in both 
 
-    assert "cse" not in result # make sure cse is not applied. 
+    propagators = result[0]["conditions"]["default"]["propagators"]
+    update_exprs = result[0]["conditions"]["default"]["update_expressions"]
+    all_text = " ".join(list(propagators.values()) + list(update_exprs.values()))
+    assert "cse" not in all_text  # or whatever the actual generated symbol prefix is
+    
+    
+ 

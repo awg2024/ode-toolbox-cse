@@ -1,4 +1,4 @@
-#!/Users/angusgray/Desktop/JSC/github/ode-toolbox-cse/.venv/bin/python3.12
+#!/home/gray2/Desktop/ode_toolbox/ode-toolbox-cse/.venv/bin/python3
 #
 # ode_analyzer.py
 #

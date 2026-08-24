@@ -200,7 +200,7 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         return result
 
     # safety check before running cse 
-    if _contains_internal_control_flow(region_expressions):
+    if _contains_internal_control_flow(all_math_expressions):
         print(f"Hidden nest Sympy.Piecewise logic {symbol_prefix}")
         return result
 
@@ -263,15 +263,14 @@ def _contains_nonfinite_expression(expressions):
 
     invalid_values = (
     sympy.zoo, # complex infinity 
-    smypy.oo, # infinity
+    sympy.oo, # infinity
     -sympy.oo, # negative infinity 
     sympy.nan # NaN
     )
 
-    for expression in expressions.values()
-
-        for invalid in invalid_values:
-                    
+    for expression in expressions:
+        if hasattr(expression, "has"):
+            for invalid in invalid_values:
                 if expression.has(invalid):
                         return True # if the value contains these invalid values return true 
                     

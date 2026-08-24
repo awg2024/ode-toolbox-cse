@@ -20,16 +20,7 @@
 #
 
 """
-system_of_shapes.py - mathematical solver
-sympy_helpers.py - currently contains low-level utilities
-
-This script provides a transformational pass for sympy expressions evaluating: 
-- cost calculations
-- dependency analysis
-- temporary validation
-- operation counting
-- future alegbraic optimisations...
-
+Expression optimisation script for the common subexpression elimination (CSE) flag 
 """
 
 
@@ -101,10 +92,11 @@ def count_cse_operations(replacements, reduced_expressions):
     return replacement_cost + reduced_cost # total final cost of expressions and temporary values 
 
 
-def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use downstream of this value belongs to a cse optimisation, enabling a clean variable handling
-    
+def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_branches=False): 
+# prefix to use downstream of this value belongs to a cse optimisation inside json
+
     """
-    Apply CSE independently to the different execution regions of an ODE-toolbox solver (e.g., update, propagators)
+    Apply CSE independently to the different execution regions of an ODE-toolbox solver (e.g., update, propagators, singularity-conditions)
 
     All expressions remain SymPy objects here. Serialization happens later in _analysis() for a safe JSON-safe solver dict. 
     """
@@ -113,7 +105,25 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
 
     cse_data = {}
     
-    # analytical propagator solver region (non-linear ODE)
+    if "conditions" in solver:
+
+        # enable conditions to pass through depending on flag
+        if not optimise_condition_branches:
+            return dict(solver)
+        
+        result = dict(solver)
+        optimised_conditions = {}
+
+        for branch_index, condition, branch in enumerate(solver["conditions"].items()):
+
+            branch_prefix = (symbol_prefix + f"cond_{branch_index}")
+            optimised_conditions[condition] = (_apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix))
+
+        
+        result["conditions"] = (optimised_conditions)
+
+
+    # analytical propagator solver region (ordinary solver)
     if "propagators" in solver: 
         
         replacements, reduced = common_subexpression_elimination(
@@ -126,7 +136,7 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_"): # prefix to use dow
         if replacements:
             cse_data["propagators"] = (replacements)
 
-    # numerical state update region (linear ODE)  
+    # numerical state update region (ordinary solver)  
     if "update_expressions" in solver:
 
         replacements, reduced = common_subexpression_elimination(
@@ -158,3 +168,38 @@ def serialize_replacements(replacements):
             "expression": str(expression)}
             for symbol, expression in replacements]
 
+
+
+def _apply_cse_to_expression_region(region, symbol_prefix):
+
+    """
+    Apply CSE inside one execution region of the system_of_shapes.generate_propagator_solver(). 
+    The condition controlling execution region is not modified, and therefore this function should never 
+    receive multiple singularity branches as this function does not hold logic for interpreting these singularities. 
+    """
+    
+    result = dict(region)
+    cse_data = []
+
+    # searching for propagator expression inside this conditional sympy object dict
+    if "propagators" in region:
+
+        replacements, reduced = common_subexpression_elimination(region["propagators"], symbol_prefix=(symbol_prefix + "prop_"))
+
+        if replacements: 
+            result["propagators"] = reduced
+            cse_data["propagators"] = replacements 
+    
+    # searching for update expressions inside this conditional sympy object dict 
+    if "update_expressions" in region:
+
+        replacements, reduced = common_subexpression_elimination(region["update_expressions"], symbol_prefix=(symbol_prefix + "update_"))
+
+        if replacements: 
+            result["update_expressions"] = reduced
+            cse_data["update_expressions"] = replacements 
+    
+    if cse_data:
+        result["cse"] = cse_data
+
+    return result 

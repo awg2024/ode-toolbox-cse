@@ -259,14 +259,15 @@ class SystemOfShapes:
 
         if not disable_singularity_detection: # checks for singularities 
             try:
-                conditions = SingularityDetection.find_propagator_singularities(P, self.A_)
+                conditions = SingularityDetection.find_propagator_singularities(P, self.A_) # find singularities in the propagator matrix 
                 # find parameters sets to uncover where matrix calculation collapses
                 conditions = conditions.union(SingularityDetection.find_inhomogeneous_singularities(self.A_, self.b_)) 
-                conditions = SingularityDetection._remove_duplicate_conditions(conditions)
+                conditions = SingularityDetection._remove_duplicate_conditions(conditions) # 
 
                 if conditions and not disable_singularity_mitigation:
-                    # generate solver for the base case (with singularity conditions that are not met)
-                    default_solver = self.generate_solver_dict_based_on_propagator_matrix_(P)
+                    
+                    # generate default solver for the equation assuming that there are no singularity conditions
+                    default_solver = self.generate_solver_dict_based_on_propagator_matrix_(P) 
 
                     # change the returned solver dictionary to include conditions
                     solver_dict = {"solver": "analytical",
@@ -279,17 +280,20 @@ class SystemOfShapes:
                     #    generate all combinations of conditions
                     #
 
-                    num_conditions = len(conditions)
-                    condition_permutations = list(itertools.product([False, True], repeat=num_conditions))
+                    num_conditions = len(conditions) # number of conditions of singularities we need to be aware of 
+
+                    condition_permutations = list(itertools.product([False, True], repeat=num_conditions)) # maps out every possible combination of these conditions with a true/false
+
                     logging.getLogger(__name__).info("Alternate solvers will be generated for each of these conditions (and combinations thereof), which amounts to " + str(len(condition_permutations)) + " solvers that will be generated.")
-                    for condition_permutation in condition_permutations:
+                    
+                    for condition_permutation in condition_permutations: # which of the current purmutations currently hold true 
                         # each ``condition_permutation[i]`` is True/False corresponding to condition i
 
                         cond_set = set()    # cond_set is the set of conditions that have to hold
                         for i, cond_holds in enumerate(condition_permutation):
                             cond = list(conditions)[i]
                             if cond_holds:
-                                # ``cond`` needs to hold for this propagator
+                                # ``cond`` needs to hold for this propagator, since this currently condition will create an inequality
                                 cond_set.add(cond)
                             else:
                                 # ``cond`` needs to **not** hold for this propagator
@@ -319,7 +323,7 @@ class SystemOfShapes:
                         solver_dict["conditions"][condition_str] = {"propagators": solver_dict_conditional["propagators"],
                                                                     "update_expressions": solver_dict_conditional["update_expressions"]}
 
-                    solver_dict = self._merge_conditions(solver_dict)
+                    solver_dict = self._merge_conditions(solver_dict) # simplifies logic scans through generated dict structure before exported to JSON template 
 
                     return solver_dict
 

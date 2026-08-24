@@ -114,9 +114,11 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         result = dict(solver)
         optimised_conditions = {}
 
-        for branch_index, condition, branch in enumerate(solver["conditions"].items()):
+        # wrap condition, branch so python understand how to unpack a sub-tuple 
+        for branch_index, (condition, branch) in enumerate(solver["conditions"].items()):
 
-            branch_prefix = (symbol_prefix + f"cond_{branch_index}")
+            branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condtion blocks get their own unique prefix
+
             optimised_conditions[condition] = (_apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix))
 
         
@@ -179,7 +181,52 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
     """
     
     result = dict(region)
-    cse_data = []
+    cse_data = {}  # use a dict instead of a list [] to avoid KeyError downstream
+
+    # collect all expressions safely into a list for the non-finite check
+    all_math_expressions = []
+
+    if "propagators" in region and region["propagators"] is not None:   # searching for propagator expression inside this conditional sympy object dict
+        # If it's a SymPy Matrix or list, extend your tracking bucket safely
+        all_math_expressions.extend(list(region["propagators"]))
+        
+    if "update_expressions" in region and region["update_expressions"] is not None:     # searching for update expressions inside this conditional sympy object dict 
+        all_math_expressions.extend(list(region["update_expressions"]))
+    
+
+    # safety check before running cse 
+    if _contains_nonfinite_expression(all_math_expressions): # second sanity check for singularities
+        print(f"Non-finite/Infinity expression detected inside region prefix: {symbol_prefix}")
+        return result
+
+    # safety check before running cse 
+    if _contains_internal_control_flow(region_expressions):
+        print(f"Hidden nest Sympy.Piecewise logic {symbol_prefix}")
+        return result
+
+    if "propagators" in region and region["propagators"] is not None:
+        replacements, reduced = common_subexpression_elimination( # perform cse on propagators inside condition
+            region["propagators"], 
+            symbol_prefix=(symbol_prefix + "prop_")
+        )
+        if replacements: 
+            result["propagators"] = reduced
+            cse_data["propagators"] = replacements 
+    
+    if "update_expressions" in region and region["update_expressions"] is not None: # perform cse on update_expressions inside condition
+        replacements, reduced = common_subexpression_elimination(
+            region["update_expressions"], 
+            symbol_prefix=(symbol_prefix + "update_")
+        )
+        if replacements: 
+            result["update_expressions"] = reduced
+            cse_data["update_expressions"] = replacements 
+    
+    if cse_data:
+        result["cse"] = cse_data # output data 
+
+    return result
+
 
     # searching for propagator expression inside this conditional sympy object dict
     if "propagators" in region:
@@ -198,8 +245,49 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         if replacements: 
             result["update_expressions"] = reduced
             cse_data["update_expressions"] = replacements 
-    
+
     if cse_data:
         result["cse"] = cse_data
 
     return result 
+
+
+def _contains_nonfinite_expression(expressions):
+
+    """
+    This is check before CSE occurs to check for symbolic infinities. This looks at an equation and determiens
+    that it will always evaluate to infinity or divide by 0, regardless of the numerical values you pass. 
+    This is secondary sanity check, as all symbolic infinities should theortically be filtered out 
+    by the singularity conditions. 
+    """
+
+    invalid_values = (
+    sympy.zoo, # complex infinity 
+    smypy.oo, # infinity
+    -sympy.oo, # negative infinity 
+    sympy.nan # NaN
+    )
+
+    for expression in expressions.values()
+
+        for invalid in invalid_values:
+                    
+                if expression.has(invalid):
+                        return True # if the value contains these invalid values return true 
+                    
+    return False
+
+
+def _contains_internal_control_flow(expressions):
+
+    """
+    If a sympy.Piecewise object is hidden inside an expression, it introduces hidden branching logic. If CSE blindly pulls an equation out from inside a 
+    Piecewise condition and places it at the global scope, it forces the CPU to compute it all the time. This ruins your conditional optimization and can 
+    lead to runtime NaN crashes or division-by-zero errors. This acts a secondary safety check before cse. 
+    """
+
+    # If passed a dictionary (like your solver_dict["update_expressions"])
+    if isinstance(expressions, dict):
+        return any(expression.has(sympy.Piecewise) for expression in expressions.values())
+    
+    

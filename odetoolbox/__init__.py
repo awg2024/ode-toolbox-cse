@@ -31,7 +31,7 @@ from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _find_
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
-from .expression_optimisation import apply_cse_to_solver, serialize_replacements
+from .expression_optimisation import apply_cse_to_solver, serialize_replacements, _serialize_replacements_metadata
 
 
 try:
@@ -228,6 +228,7 @@ disable_singularity_detection: bool = False,
 disable_singularity_mitigation: bool = False, 
 use_alternative_expM: bool = False, preserve_expressions: Union[bool, Iterable[str]] = False, 
 enable_cse: bool = False, 
+enable_cse_condition_branches: bool = False, 
 log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShapes, List[Shape]]:
     r"""
     Like analysis(), but additionally returns ``shape_sys`` and ``shapes``.
@@ -395,7 +396,7 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                 solver_dict.get("solver")) # analytical vs numerical
             
             # pass solver dict to cse 
-            solvers_json[idx] = (apply_cse_to_solver(solver_dict))
+            solvers_json[idx] = (apply_cse_to_solver(solver_dict, optimise_condition_branches=enable_cse_condition_branches))
      
     #
     #   convert expressions from sympy to string
@@ -438,6 +439,9 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
 
         if "conditions" in solver_json.keys():
             for cond, cond_solver in solver_json["conditions"].items():
+
+                _serialize_replacements_metadata(cond_solver) # serialize singularity condition metadata. 
+
                 if "update_expressions" in cond_solver:
                     for sym, expr in cond_solver["update_expressions"].items():
                         cond_solver["update_expressions"][sym] = str(expr)
@@ -456,8 +460,8 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                     for sym, expr in cond_solver["propagators"].items():
                         cond_solver["propagators"][sym] = str(expr)
                         
-    # Serialise cse metadata, is other objects serialized? 
-    if "cse" in solver_json:
+   
+    if "cse" in solver_json: # if cse found 
         for region, replacements in (solver_json["cse"].items()):
             solver_json["cse"][region] = (serialize_replacements(replacements))
 
@@ -485,6 +489,7 @@ def analysis(indict, disable_stiffness_check: bool = False,
  disable_singularity_mitigation: bool = False, 
  use_alternative_expM: bool = False, 
  enable_cse: bool = False, 
+ enable_cse_condition_branches: bool = False, 
  preserve_expressions: Union[bool, Iterable[str]] = False, 
  
  log_level: Union[str, int] = logging.WARNING) -> List[Dict]:
@@ -500,6 +505,7 @@ def analysis(indict, disable_stiffness_check: bool = False,
     :param preserve_expressions: Set to True, or a list of strings corresponding to individual variable names, to disable internal rewriting of expressions, and return same output as input expression where possible. Only applies to variables specified as first-order differential equations.
     :param log_level: Sets the logging threshold. Logging messages which are less severe than ``log_level`` will be ignored. Log levels can be provided as an integer or string, for example "INFO" (more messages) or "WARN" (fewer messages). For a list of valid logging levels, see https://docs.python.org/3/library/logging.html#logging-levels
     :param enable_cse: Boolean flag set to False. If enabled it will perform sub-expression elimination on update_expression, propagators and singularity conditions of the generated .cpp nestml file. 
+    :param preserves_cse_condition_branches: Boolean flag set to false. Requires enable_cse=True for functionality. If enabled this will perform independent analysis of singularity condition branches. 
 
     :return: The result of the analysis. For details, see https://ode-toolbox.readthedocs.io/en/latest/index.html#output
     """
@@ -511,5 +517,6 @@ def analysis(indict, disable_stiffness_check: bool = False,
                         use_alternative_expM=use_alternative_expM,
                         preserve_expressions=preserve_expressions,
                         enable_cse=enable_cse,
+                        enable_cse_condition_branches=enable_cse_condition_branches,
                         log_level=log_level)
     return d

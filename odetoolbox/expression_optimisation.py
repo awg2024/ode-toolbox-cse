@@ -118,42 +118,20 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
             branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condtion blocks get their own unique prefix
 
-            # count mathematical cost before cse 
-            raw_expressions = [] # count number of operations
-            if "update_expressions" in branch:
-                raw_expressions.extend(branch["update_expressions"].values())
-            if "propagators" in branch:
-                raw_expressions.extend(list(branch["propagators"]))
-            before_cost = count_operations(raw_expressions)
+            optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix)
 
-            # apply localised region cse optimisation 
-            optimized_region = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix)
+        result["conditions"] = optimised_conditions
 
-            # Loop through your active target regions 
-            for region_key in ["update_expressions", "propagators"]:
-                branch_replacements = optimized_region["cse"][region_key]
-                branch_reduced = optimized_region[region_key]
-
-                # Calculate your true optimized operational weight
-                after_cost = count_cse_operations(branch_replacements, branch_reduced)
-            
-            # if the branch optimisation didn't reduced cost 
-            if (replacements and after_cost < before_cost):
-                optimised_conditions[condition] = dict(branch)
-                continue  # Skip serialization and proceed to the next condition branch
-            
-            if "cse" in optimized_region:
-                optimized_region["cse"] = _serialize_replacements_metadata(optimized_region["cse"])   # Serialize the metadata after your cost metrics have been calculated
-
-        # Store the completely optimized and validated block back into your conditions matrix
-        optimised_conditions[condition] = optimized_region
+        ### does this make sense? 
+        if "cse" in optimised_conditions:  # Serialize the metadata after your cost metrics have been calculated
+            optimised_conditions = serialize_replacements_metadata(optimised_conditions["cse"])  
 
 
     #  analytical propagator solver region (ordinary solver)
     if "propagators" in solver:  # searching high-level dict 
         
         # flatten matrix and calculate original propagator mathematical cost
-        before_cost = count_operations(list(solver["propagators"]))
+        before_cost = count_operations(solver["propagators"].values())
 
         replacements, reduced = common_subexpression_elimination(
             solver["propagators"],
@@ -164,18 +142,15 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         if replacements and after_cost >= before_cost:
             result["propagators"] = solver["propagators"]  # Revert reduced expression back to the untouched original matrix layout
 
-         # keep sympy object here 
-        result["propagators"] = reduced
+        else: # if the optimisation is profitable
+            result["propagators"] = reduced
+            cse_data["propagators"] = replacements
 
-        if replacements:
-            cse_data["propagators"] = (replacements)
-
-    # ------- numerical state update region (ordinary solver)  
+    # numerical state update region (ordinary solver)  
     if "update_expressions" in solver: # searching high level dict 
 
-
-        before_cost = count_operations(list(solver["update_expressions"]))
-
+        before_cost = count_operations(solver["update_expressions"].values())
+    
         replacements, reduced = common_subexpression_elimination(
             solver["update_expressions"],
             symbol_prefix=symbol_prefix + "update_")
@@ -183,13 +158,11 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         after_cost = count_cse_operations(replacements, reduced)
 
         if replacements and after_cost >= before_cost:
-            result["propagators"] = solver["propagators"]  # Revert reduced expression back to the untouched original matrix layout
+            result["update_expressions"] = solver["update_expressions"]  # Revert reduced expression back to the untouched original matrix layout
 
-        # keep sympy object here 
-        result["update_expressions"] = reduced
-
-        if replacements:
-            cse_data["update_expressions"] = (replacements)
+        else: # if the optimisation is profitable
+            result["update_expressions"] = reduced
+            cse_data["update_expressions"] = replacements
 
     # Only add CSE metadata when something was actually extracted.
     if cse_data:
@@ -242,70 +215,42 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
     # collect all expressions safely into a list for the non-finite check
     all_math_expressions = []
 
-    if "propagators" in region and region["propagators"] is not None:   # searching for propagator expression inside this conditional sympy object dict
-        # If it's a SymPy Matrix or list, extend your tracking bucket safely
-        all_math_expressions.extend(list(region["propagators"]))
-        
-    if "update_expressions" in region and region["update_expressions"] is not None:     # searching for update expressions inside this conditional sympy object dict 
-        all_math_expressions.extend(list(region["update_expressions"]))
+    if region.get("propagators"):
+        all_math_expressions.extend(region["propagators"].values())
+    
+    if region.get("update_expressions"):
+        all_math_expressions.extend(region["propagators"].values())
     
 
-    # safety check before running cse 
+    # safety check before running cse in singularity
     if _contains_nonfinite_expression(all_math_expressions): # second sanity check for singularities
         print(f"Non-finite/Infinity expression detected inside region prefix: {symbol_prefix}")
         return result
 
-    # safety check before running cse 
+    # safety check before running cse in singularity
     if _contains_internal_control_flow(all_math_expressions):
         print(f"Hidden nest Sympy.Piecewise logic {symbol_prefix}")
         return result
 
-    if "propagators" in region and region["propagators"] is not None:
-        replacements, reduced = common_subexpression_elimination( # perform cse on propagators inside condition
-            region["propagators"], 
-            symbol_prefix=(symbol_prefix + "prop_")
-        )
+    if region.get("propagators")
+        replacements, reduced = _run_profitable_cse(region["propagators"], symbol_prefix + "prop_")
+        
         if replacements: 
             result["propagators"] = reduced
             cse_data["propagators"] = replacements 
+
     
-    if "update_expressions" in region and region["update_expressions"] is not None: # perform cse on update_expressions inside condition
-        replacements, reduced = common_subexpression_elimination(
-            region["update_expressions"], 
-            symbol_prefix=(symbol_prefix + "update_")
-        )
+    if region.get("update_expressions")
+        replacements, reduced = _run_profitable_cse(region["update_expressions"], symbol_prefix + "update_")
+        
         if replacements: 
             result["update_expressions"] = reduced
             cse_data["update_expressions"] = replacements 
-    
+
     if cse_data:
         result["cse"] = cse_data # output data 
 
     return result
-
-
-    # searching for propagator expression inside this conditional sympy object dict
-    if "propagators" in region:
-
-        replacements, reduced = common_subexpression_elimination(region["propagators"], symbol_prefix=(symbol_prefix + "prop_"))
-
-        if replacements: 
-            result["propagators"] = reduced
-            cse_data["propagators"] = replacements 
-    
-    # searching for update expressions inside this conditional sympy object dict 
-    if "update_expressions" in region:
-
-        replacements, reduced = common_subexpression_elimination(region["update_expressions"], symbol_prefix=(symbol_prefix + "update_"))
-
-        if replacements: 
-            result["update_expressions"] = reduced
-            cse_data["update_expressions"] = replacements 
-
-    if cse_data:
-        result["cse"] = cse_data
-
-    return result 
 
 
 def _contains_nonfinite_expression(expressions):
@@ -341,8 +286,35 @@ def _contains_internal_control_flow(expressions):
     lead to runtime NaN crashes or division-by-zero errors. This acts a secondary safety check before cse. 
     """
 
-    # If passed a dictionary (like your solver_dict["update_expressions"])
-    if isinstance(expressions, dict):
-        return any(expression.has(sympy.Piecewise) for expression in expressions.values())
+    # returns True/False for any sympy Piecewise is present 
+    return any(isinstance(expression, sympy.Basic) and expression.has(sympy.Piecewise) for expression in expressions)
+
     
+
+def _run_profitable_cse(expressions, symbol_prefix):
+
+    """
+    Run CSE and keep the transformation only when symbolic operation count is reduced. 
+    Enables region-specific profiability checks rather than wide-spread cse profitability checks. 
+    """
+
+    if not expressions: # if no expressions are passed 
+        return [], expressions 
     
+    # run cse 
+    replacements, reduced = (
+        common_subexpression_elimination(
+            expressions,
+            symbol_prefix=symbol_prefix))
+    
+    if not replacements: 
+        return [], expressions
+    
+    before_cost = count_operations(expressions.values())
+
+    after_cost = count_cse_operations(replacements, reduced)
+
+    if after_cost >= before_cost:
+        return [], expressions
+    
+    return replacements, reduced

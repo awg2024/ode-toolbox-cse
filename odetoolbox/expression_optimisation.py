@@ -97,12 +97,11 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
     """
     Apply CSE independently to the different execution regions of an ODE-toolbox solver (e.g., update, propagators, singularity-conditions)
-
-    All expressions remain SymPy objects here. Serialization happens later in _analysis() for a safe JSON-safe solver dict. 
+    Nested replacements serialization is performed safely at the boundaries of each region.
     """
 
     result = dict(solver)
-
+    
     cse_data = {}
     
     if "conditions" in solver:
@@ -119,18 +118,51 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
             branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condtion blocks get their own unique prefix
 
-            optimised_conditions[condition] = (_apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix))
+            # count mathematical cost before cse 
+            raw_expressions = [] # count number of operations
+            if "update_expressions" in branch:
+                raw_expressions.extend(branch["update_expressions"].values())
+            if "propagators" in branch:
+                raw_expressions.extend(list(branch["propagators"]))
+            before_cost = count_operations(raw_expressions)
 
+            # apply localised region cse optimisation 
+            optimized_region = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix)
+
+            # Loop through your active target regions 
+            for region_key in ["update_expressions", "propagators"]:
+                branch_replacements = optimized_region["cse"][region_key]
+                branch_reduced = optimized_region[region_key]
+
+                # Calculate your true optimized operational weight
+                after_cost = count_cse_operations(branch_replacements, branch_reduced)
+            
+            # if the branch optimisation didn't reduced cost 
+            if (replacements and after_cost < before_cost):
+                optimised_conditions[condition] = dict(branch)
+                continue  # Skip serialization and proceed to the next condition branch
+            
+            if "cse" in optimized_region:
+                optimized_region["cse"] = _serialize_replacements_metadata(optimized_region["cse"])   # Serialize the metadata after your cost metrics have been calculated
+
+        # Store the completely optimized and validated block back into your conditions matrix
+        optimised_conditions[condition] = optimized_region
+
+
+    #  analytical propagator solver region (ordinary solver)
+    if "propagators" in solver:  # searching high-level dict 
         
-        result["conditions"] = (optimised_conditions)
+        # flatten matrix and calculate original propagator mathematical cost
+        before_cost = count_operations(list(solver["propagators"]))
 
-
-    # analytical propagator solver region (ordinary solver)
-    if "propagators" in solver: 
-        
         replacements, reduced = common_subexpression_elimination(
             solver["propagators"],
             symbol_prefix=symbol_prefix + "prop_")
+
+        after_cost = count_cse_operations(replacements, reduced)
+
+        if replacements and after_cost >= before_cost:
+            result["propagators"] = solver["propagators"]  # Revert reduced expression back to the untouched original matrix layout
 
          # keep sympy object here 
         result["propagators"] = reduced
@@ -138,13 +170,21 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         if replacements:
             cse_data["propagators"] = (replacements)
 
-    # numerical state update region (ordinary solver)  
-    if "update_expressions" in solver:
+    # ------- numerical state update region (ordinary solver)  
+    if "update_expressions" in solver: # searching high level dict 
+
+
+        before_cost = count_operations(list(solver["update_expressions"]))
 
         replacements, reduced = common_subexpression_elimination(
             solver["update_expressions"],
             symbol_prefix=symbol_prefix + "update_")
-        
+
+        after_cost = count_cse_operations(replacements, reduced)
+
+        if replacements and after_cost >= before_cost:
+            result["propagators"] = solver["propagators"]  # Revert reduced expression back to the untouched original matrix layout
+
         # keep sympy object here 
         result["update_expressions"] = reduced
 
@@ -162,13 +202,29 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
 def serialize_replacements(replacements):
     """
-    Convert CSE replacement tuples to JSON-safe data
+    Convert CSE replacement tuples to JSON-safe data (high-level dicts: update_expressions, propagators)
     """
 
     return [{
             "symbol": str(symbol),
             "expression": str(expression)}
             for symbol, expression in replacements]
+
+
+def _serialize_replacements_metadata(region):
+    """
+    serialize cse replacement tuples nested in a solver (e.g., when solving a condition json we need to search deeper than top-level dicts)
+    """
+
+    # pass if cse wasn't conducted
+    if not "cse" in region:
+        return
+    
+    for expression_region, replacements in (region["cse"].items()):
+
+        # call the indivudal serialise functon once within the solver 
+        region["cse"[expression_region] = serialize_replacements(replacements)]
+
 
 
 

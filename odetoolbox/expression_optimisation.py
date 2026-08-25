@@ -97,14 +97,12 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
     """
     Apply CSE independently to the different execution regions of an ODE-toolbox solver (e.g., update, propagators, singularity-conditions)
-    Nested replacements serialization is performed safely at the boundaries of each region.
     """
-
-    result = dict(solver)
     
+    result = dict(solver)
     cse_data = {}
     
-    if "conditions" in solver:
+    if "conditions" in solver: # handle singularity conditions 
 
         # enable conditions to pass through depending on flag
         if not optimise_condition_branches:
@@ -116,61 +114,16 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         # wrap condition, branch so python understand how to unpack a sub-tuple 
         for branch_index, (condition, branch) in enumerate(solver["conditions"].items()):
 
-            branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condtion blocks get their own unique prefix
+            branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condition blocks get their own unique prefix
 
-            optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix)
+            optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix) # apply cse to each independent branch 
 
         result["conditions"] = optimised_conditions
 
-        ### does this make sense? 
-        if "cse" in optimised_conditions:  # Serialize the metadata after your cost metrics have been calculated
-            optimised_conditions = serialize_replacements_metadata(optimised_conditions["cse"])  
+        return result # return result if we've conducted cse singularity
 
-
-    #  analytical propagator solver region (ordinary solver)
-    if "propagators" in solver:  # searching high-level dict 
-        
-        # flatten matrix and calculate original propagator mathematical cost
-        before_cost = count_operations(solver["propagators"].values())
-
-        replacements, reduced = common_subexpression_elimination(
-            solver["propagators"],
-            symbol_prefix=symbol_prefix + "prop_")
-
-        after_cost = count_cse_operations(replacements, reduced)
-
-        if replacements and after_cost >= before_cost:
-            result["propagators"] = solver["propagators"]  # Revert reduced expression back to the untouched original matrix layout
-
-        else: # if the optimisation is profitable
-            result["propagators"] = reduced
-            cse_data["propagators"] = replacements
-
-    # numerical state update region (ordinary solver)  
-    if "update_expressions" in solver: # searching high level dict 
-
-        before_cost = count_operations(solver["update_expressions"].values())
-    
-        replacements, reduced = common_subexpression_elimination(
-            solver["update_expressions"],
-            symbol_prefix=symbol_prefix + "update_")
-
-        after_cost = count_cse_operations(replacements, reduced)
-
-        if replacements and after_cost >= before_cost:
-            result["update_expressions"] = solver["update_expressions"]  # Revert reduced expression back to the untouched original matrix layout
-
-        else: # if the optimisation is profitable
-            result["update_expressions"] = reduced
-            cse_data["update_expressions"] = replacements
-
-    # Only add CSE metadata when something was actually extracted.
-    if cse_data:
-        result["cse"] = cse_data
-    
-    
-    return result
-
+    # pass helper function to 'update' 'propagators' 
+    return _apply_cse_to_expression_region(solver, symbol_prefix=symbol_prefix)
 
 
 def serialize_replacements(replacements):
@@ -212,35 +165,35 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
     # collect all expressions safely into a list for the non-finite check
     all_math_expressions = []
 
-    if region.get("propagators"):
+    if region.get("propagators"): # collect update_expressions values inside all_math_expressions 
         all_math_expressions.extend(region["propagators"].values())
     
-    if region.get("update_expressions"):
+    if region.get("update_expressions"): # collect propagator values inside all_math_expressions 
         all_math_expressions.extend(region["update_expressions"].values())
     
-
     # safety check before running cse in singularity
     if _contains_nonfinite_expression(all_math_expressions): # second sanity check for singularities
-        print(f"Non-finite/Infinity expression detected inside region prefix: {symbol_prefix}")
+        logger = logging.getLogger(__name__)
+        logger.debug("Skipping CSE for region %s: non-finite symbolic expression detected", symbol_prefix)
         return result
 
     # safety check before running cse in singularity
     if _contains_internal_control_flow(all_math_expressions):
-        print(f"Hidden nest Sympy.Piecewise logic {symbol_prefix}")
+        logger = logging.getLogger(__name__)
+        logger.debug("Skipping CSE for region %s: nested SymPy Piecewise expression detected", symbol_prefix)
         return result
 
-    if region.get("propagators"):
+    if region.get("propagators"): # run cse for propagators high-level dict 
         replacements, reduced = _run_profitable_cse(region["propagators"], symbol_prefix + "prop_")
         
-        if replacements: 
+        if replacements: # if replacement are present store reduced expressions and tmp values 
             result["propagators"] = reduced
             cse_data["propagators"] = replacements 
 
-    
-    if region.get("update_expressions"):
+    if region.get("update_expressions"): # run cse for propagators high-level dict 
         replacements, reduced = _run_profitable_cse(region["update_expressions"], symbol_prefix + "update_")
         
-        if replacements: 
+        if replacements:  # if replacement are present store reduced expressions and tmp values 
             result["update_expressions"] = reduced
             cse_data["update_expressions"] = replacements 
 

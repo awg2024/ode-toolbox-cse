@@ -194,9 +194,6 @@ def _get_all_first_order_variables(indict) -> Iterable[str]:
 
 
 def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
-    #dependency checker. looks for specific symbol names and checks if its used in the processed solver structural json.
-    #  searching update_expressions, propagators, conditions
-    
     if "update_expressions" in solver_json.keys():
         for sym, expr in solver_json["update_expressions"].items():
             if param_name in [str(sym) for sym in list(expr.atoms())]:
@@ -204,7 +201,7 @@ def symbol_appears_in_any_expr(param_name, solver_json) -> bool:
 
     if "propagators" in solver_json.keys():
         for sym, expr in solver_json["propagators"].items():
-            if param_name in [str(sym) for sym in list(expr.atoms())]: 
+            if param_name in [str(sym) for sym in list(expr.atoms())]:
                 return True
 
     if "conditions" in solver_json.keys():
@@ -385,7 +382,7 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
             solver_json["parameters"] = {}
             for param_name, param_expr in indict["parameters"].items():
                 # only make parameters appear in a solver if they are actually used there
-                if symbol_appears_in_any_expr(param_name, solver_json): # WARNING should param (sys) for metadata lookup 
+                if symbol_appears_in_any_expr(sym, solver_json): # WARNING should param (sym) for metadata lookup 
                     sympy_expr = _sympy_parse_real(param_expr, global_dict=Shape._sympy_globals)
 
                     # validate output for numerical problems -- note that we skip checking for infinity here as some parameters (like "V_max") could be legitimately defined as infinity

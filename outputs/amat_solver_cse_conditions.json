@@ -1,0 +1,322 @@
+[
+  {
+    "conditions": {
+      "(tau_m == tau_syn_inh) && (tau_syn_exc == tau_m)": {
+        "cse": {
+          "propagators": [
+            {
+              "expression": "__h/tau_syn_inh",
+              "symbol": "__ode_cse_cond_3_prop_0"
+            },
+            {
+              "expression": "exp(-__ode_cse_cond_3_prop_0)",
+              "symbol": "__ode_cse_cond_3_prop_1"
+            },
+            {
+              "expression": "__h/tau_m",
+              "symbol": "__ode_cse_cond_3_prop_2"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_3_prop_2)",
+              "symbol": "__ode_cse_cond_3_prop_3"
+            },
+            {
+              "expression": "C_m*__h*exp(__ode_cse_cond_3_prop_0)",
+              "symbol": "__ode_cse_cond_3_prop_4"
+            }
+          ],
+          "update_expressions": [
+            {
+              "expression": "tau_syn_inh/C_m",
+              "symbol": "__ode_cse_cond_3_update_0"
+            },
+            {
+              "expression": "I_e*__ode_cse_cond_3_update_0",
+              "symbol": "__ode_cse_cond_3_update_1"
+            },
+            {
+              "expression": "I_stim*__ode_cse_cond_3_update_0",
+              "symbol": "__ode_cse_cond_3_update_2"
+            }
+          ]
+        },
+        "propagators": {
+          "__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes": "exp(-__ode_cse_cond_3_prop_2)",
+          "__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes": "__ode_cse_cond_3_prop_1",
+          "__P__V_m__I_kernel_exc__X__exc_spikes": "-__h*tau_m*tau_syn_inh*unit_psc/(__ode_cse_cond_3_prop_4*tau_m - __ode_cse_cond_3_prop_4*tau_syn_inh) + tau_m*tau_syn_inh*unit_psc/(__ode_cse_cond_3_prop_3*tau_m - __ode_cse_cond_3_prop_3*tau_syn_inh)",
+          "__P__V_m__I_kernel_inh__X__inh_spikes": "-__h*__ode_cse_cond_3_prop_1*unit_psc/C_m",
+          "__P__V_m__V_m": "__ode_cse_cond_3_prop_1",
+          "__P__V_th_alpha_1__V_th_alpha_1": "exp(-__h/tau_1)",
+          "__P__V_th_alpha_2__V_th_alpha_2": "exp(-__h/tau_2)",
+          "__P__refr_t__refr_t": "1"
+        },
+        "update_expressions": {
+          "I_kernel_exc__X__exc_spikes": "I_kernel_exc__X__exc_spikes*__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes",
+          "I_kernel_inh__X__inh_spikes": "I_kernel_inh__X__inh_spikes*__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes",
+          "V_m": "-E_L*__P__V_m__V_m + E_L + I_kernel_exc__X__exc_spikes*__P__V_m__I_kernel_exc__X__exc_spikes + I_kernel_inh__X__inh_spikes*__P__V_m__I_kernel_inh__X__inh_spikes + V_m*__P__V_m__V_m - __P__V_m__V_m*__ode_cse_cond_3_update_1 - __P__V_m__V_m*__ode_cse_cond_3_update_2 + __ode_cse_cond_3_update_1 + __ode_cse_cond_3_update_2",
+          "V_th_alpha_1": "V_th_alpha_1*__P__V_th_alpha_1__V_th_alpha_1",
+          "V_th_alpha_2": "V_th_alpha_2*__P__V_th_alpha_2__V_th_alpha_2",
+          "refr_t": "__P__refr_t__refr_t*refr_t - 1.0*__h"
+        }
+      },
+      "(tau_m == tau_syn_inh) && (tau_syn_exc!=tau_m)": {
+        "cse": {
+          "propagators": [
+            {
+              "expression": "__h/tau_syn_inh",
+              "symbol": "__ode_cse_cond_2_prop_0"
+            },
+            {
+              "expression": "exp(-__ode_cse_cond_2_prop_0)",
+              "symbol": "__ode_cse_cond_2_prop_1"
+            },
+            {
+              "expression": "__h/tau_syn_exc",
+              "symbol": "__ode_cse_cond_2_prop_2"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_2_prop_2)",
+              "symbol": "__ode_cse_cond_2_prop_3"
+            },
+            {
+              "expression": "C_m*__h*exp(__ode_cse_cond_2_prop_0)",
+              "symbol": "__ode_cse_cond_2_prop_4"
+            }
+          ],
+          "update_expressions": [
+            {
+              "expression": "tau_syn_inh/C_m",
+              "symbol": "__ode_cse_cond_2_update_0"
+            },
+            {
+              "expression": "I_e*__ode_cse_cond_2_update_0",
+              "symbol": "__ode_cse_cond_2_update_1"
+            },
+            {
+              "expression": "I_stim*__ode_cse_cond_2_update_0",
+              "symbol": "__ode_cse_cond_2_update_2"
+            }
+          ]
+        },
+        "propagators": {
+          "__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes": "exp(-__ode_cse_cond_2_prop_2)",
+          "__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes": "__ode_cse_cond_2_prop_1",
+          "__P__V_m__I_kernel_exc__X__exc_spikes": "-__h*tau_syn_exc*tau_syn_inh*unit_psc/(__ode_cse_cond_2_prop_4*tau_syn_exc - __ode_cse_cond_2_prop_4*tau_syn_inh) + tau_syn_exc*tau_syn_inh*unit_psc/(__ode_cse_cond_2_prop_3*tau_syn_exc - __ode_cse_cond_2_prop_3*tau_syn_inh)",
+          "__P__V_m__I_kernel_inh__X__inh_spikes": "-__h*__ode_cse_cond_2_prop_1*unit_psc/C_m",
+          "__P__V_m__V_m": "__ode_cse_cond_2_prop_1",
+          "__P__V_th_alpha_1__V_th_alpha_1": "exp(-__h/tau_1)",
+          "__P__V_th_alpha_2__V_th_alpha_2": "exp(-__h/tau_2)",
+          "__P__refr_t__refr_t": "1"
+        },
+        "update_expressions": {
+          "I_kernel_exc__X__exc_spikes": "I_kernel_exc__X__exc_spikes*__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes",
+          "I_kernel_inh__X__inh_spikes": "I_kernel_inh__X__inh_spikes*__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes",
+          "V_m": "-E_L*__P__V_m__V_m + E_L + I_kernel_exc__X__exc_spikes*__P__V_m__I_kernel_exc__X__exc_spikes + I_kernel_inh__X__inh_spikes*__P__V_m__I_kernel_inh__X__inh_spikes + V_m*__P__V_m__V_m - __P__V_m__V_m*__ode_cse_cond_2_update_1 - __P__V_m__V_m*__ode_cse_cond_2_update_2 + __ode_cse_cond_2_update_1 + __ode_cse_cond_2_update_2",
+          "V_th_alpha_1": "V_th_alpha_1*__P__V_th_alpha_1__V_th_alpha_1",
+          "V_th_alpha_2": "V_th_alpha_2*__P__V_th_alpha_2__V_th_alpha_2",
+          "refr_t": "__P__refr_t__refr_t*refr_t - 1.0*__h"
+        }
+      },
+      "(tau_syn_exc == tau_m) && (tau_m!=tau_syn_inh)": {
+        "cse": {
+          "propagators": [
+            {
+              "expression": "__h/tau_m",
+              "symbol": "__ode_cse_cond_1_prop_0"
+            },
+            {
+              "expression": "exp(-__ode_cse_cond_1_prop_0)",
+              "symbol": "__ode_cse_cond_1_prop_1"
+            },
+            {
+              "expression": "__h*unit_psc",
+              "symbol": "__ode_cse_cond_1_prop_2"
+            },
+            {
+              "expression": "__h/tau_syn_inh",
+              "symbol": "__ode_cse_cond_1_prop_3"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_1_prop_3)",
+              "symbol": "__ode_cse_cond_1_prop_4"
+            },
+            {
+              "expression": "C_m*__h*exp(__ode_cse_cond_1_prop_0)",
+              "symbol": "__ode_cse_cond_1_prop_5"
+            }
+          ],
+          "update_expressions": [
+            {
+              "expression": "tau_m/C_m",
+              "symbol": "__ode_cse_cond_1_update_0"
+            },
+            {
+              "expression": "I_e*__ode_cse_cond_1_update_0",
+              "symbol": "__ode_cse_cond_1_update_1"
+            },
+            {
+              "expression": "I_stim*__ode_cse_cond_1_update_0",
+              "symbol": "__ode_cse_cond_1_update_2"
+            }
+          ]
+        },
+        "propagators": {
+          "__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes": "__ode_cse_cond_1_prop_1",
+          "__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes": "exp(-__ode_cse_cond_1_prop_3)",
+          "__P__V_m__I_kernel_exc__X__exc_spikes": "__ode_cse_cond_1_prop_1*__ode_cse_cond_1_prop_2/C_m",
+          "__P__V_m__I_kernel_inh__X__inh_spikes": "-__ode_cse_cond_1_prop_2*tau_m*tau_syn_inh/(__ode_cse_cond_1_prop_5*tau_m - __ode_cse_cond_1_prop_5*tau_syn_inh) + tau_m*tau_syn_inh*unit_psc/(__ode_cse_cond_1_prop_4*tau_m - __ode_cse_cond_1_prop_4*tau_syn_inh)",
+          "__P__V_m__V_m": "__ode_cse_cond_1_prop_1",
+          "__P__V_th_alpha_1__V_th_alpha_1": "exp(-__h/tau_1)",
+          "__P__V_th_alpha_2__V_th_alpha_2": "exp(-__h/tau_2)",
+          "__P__refr_t__refr_t": "1"
+        },
+        "update_expressions": {
+          "I_kernel_exc__X__exc_spikes": "I_kernel_exc__X__exc_spikes*__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes",
+          "I_kernel_inh__X__inh_spikes": "I_kernel_inh__X__inh_spikes*__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes",
+          "V_m": "-E_L*__P__V_m__V_m + E_L + I_kernel_exc__X__exc_spikes*__P__V_m__I_kernel_exc__X__exc_spikes + I_kernel_inh__X__inh_spikes*__P__V_m__I_kernel_inh__X__inh_spikes + V_m*__P__V_m__V_m - __P__V_m__V_m*__ode_cse_cond_1_update_1 - __P__V_m__V_m*__ode_cse_cond_1_update_2 + __ode_cse_cond_1_update_1 + __ode_cse_cond_1_update_2",
+          "V_th_alpha_1": "V_th_alpha_1*__P__V_th_alpha_1__V_th_alpha_1",
+          "V_th_alpha_2": "V_th_alpha_2*__P__V_th_alpha_2__V_th_alpha_2",
+          "refr_t": "__P__refr_t__refr_t*refr_t - 1.0*__h"
+        }
+      },
+      "default": {
+        "cse": {
+          "propagators": [
+            {
+              "expression": "__h/tau_m",
+              "symbol": "__ode_cse_cond_0_prop_0"
+            },
+            {
+              "expression": "__h/tau_syn_exc",
+              "symbol": "__ode_cse_cond_0_prop_1"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_0_prop_1)",
+              "symbol": "__ode_cse_cond_0_prop_2"
+            },
+            {
+              "expression": "tau_m*unit_psc",
+              "symbol": "__ode_cse_cond_0_prop_3"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_0_prop_0)",
+              "symbol": "__ode_cse_cond_0_prop_4"
+            },
+            {
+              "expression": "__ode_cse_cond_0_prop_4*tau_m",
+              "symbol": "__ode_cse_cond_0_prop_5"
+            },
+            {
+              "expression": "__h/tau_syn_inh",
+              "symbol": "__ode_cse_cond_0_prop_6"
+            },
+            {
+              "expression": "C_m*exp(__ode_cse_cond_0_prop_6)",
+              "symbol": "__ode_cse_cond_0_prop_7"
+            },
+            {
+              "expression": "__ode_cse_cond_0_prop_3*tau_syn_inh",
+              "symbol": "__ode_cse_cond_0_prop_8"
+            }
+          ],
+          "update_expressions": [
+            {
+              "expression": "tau_m/C_m",
+              "symbol": "__ode_cse_cond_0_update_0"
+            },
+            {
+              "expression": "I_e*__ode_cse_cond_0_update_0",
+              "symbol": "__ode_cse_cond_0_update_1"
+            },
+            {
+              "expression": "I_stim*__ode_cse_cond_0_update_0",
+              "symbol": "__ode_cse_cond_0_update_2"
+            }
+          ]
+        },
+        "propagators": {
+          "__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes": "exp(-__ode_cse_cond_0_prop_1)",
+          "__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes": "exp(-__ode_cse_cond_0_prop_6)",
+          "__P__V_m__I_kernel_exc__X__exc_spikes": "-__ode_cse_cond_0_prop_3*tau_syn_exc/(__ode_cse_cond_0_prop_2*tau_m - __ode_cse_cond_0_prop_2*tau_syn_exc) + tau_m*tau_syn_exc*unit_psc/(-__ode_cse_cond_0_prop_4*tau_syn_exc + __ode_cse_cond_0_prop_5)",
+          "__P__V_m__I_kernel_inh__X__inh_spikes": "__ode_cse_cond_0_prop_8/(__ode_cse_cond_0_prop_7*tau_m - __ode_cse_cond_0_prop_7*tau_syn_inh) - __ode_cse_cond_0_prop_8/(-__ode_cse_cond_0_prop_4*tau_syn_inh + __ode_cse_cond_0_prop_5)",
+          "__P__V_m__V_m": "exp(-__ode_cse_cond_0_prop_0)",
+          "__P__V_th_alpha_1__V_th_alpha_1": "exp(-__h/tau_1)",
+          "__P__V_th_alpha_2__V_th_alpha_2": "exp(-__h/tau_2)",
+          "__P__refr_t__refr_t": "1"
+        },
+        "update_expressions": {
+          "I_kernel_exc__X__exc_spikes": "I_kernel_exc__X__exc_spikes*__P__I_kernel_exc__X__exc_spikes__I_kernel_exc__X__exc_spikes",
+          "I_kernel_inh__X__inh_spikes": "I_kernel_inh__X__inh_spikes*__P__I_kernel_inh__X__inh_spikes__I_kernel_inh__X__inh_spikes",
+          "V_m": "-E_L*__P__V_m__V_m + E_L + I_kernel_exc__X__exc_spikes*__P__V_m__I_kernel_exc__X__exc_spikes + I_kernel_inh__X__inh_spikes*__P__V_m__I_kernel_inh__X__inh_spikes + V_m*__P__V_m__V_m - __P__V_m__V_m*__ode_cse_cond_0_update_1 - __P__V_m__V_m*__ode_cse_cond_0_update_2 + __ode_cse_cond_0_update_1 + __ode_cse_cond_0_update_2",
+          "V_th_alpha_1": "V_th_alpha_1*__P__V_th_alpha_1__V_th_alpha_1",
+          "V_th_alpha_2": "V_th_alpha_2*__P__V_th_alpha_2__V_th_alpha_2",
+          "refr_t": "__P__refr_t__refr_t*refr_t - 1.0*__h"
+        }
+      }
+    },
+    "initial_values": {
+      "I_kernel_exc__X__exc_spikes": "1",
+      "I_kernel_inh__X__inh_spikes": "1",
+      "V_m": "E_L",
+      "V_th_alpha_1": "0",
+      "V_th_alpha_2": "0",
+      "refr_t": "0"
+    },
+    "parameters": {
+      "C_m": "200.000000000000",
+      "E_L": "-70.0000000000000",
+      "I_e": "0",
+      "alpha_1": "10.0000000000000",
+      "alpha_2": "0",
+      "beta": "0",
+      "omega": "-65.0000000000000",
+      "refr_T": "2.00000000000000",
+      "tau_1": "10.0000000000000",
+      "tau_2": "200.000000000000",
+      "tau_m": "10.0000000000000",
+      "tau_syn_exc": "1.00000000000000",
+      "tau_syn_inh": "3.00000000000000",
+      "tau_v": "5.00000000000000"
+    },
+    "solver": "analytical",
+    "state_variables": [
+      "V_th_alpha_1",
+      "V_th_alpha_2",
+      "V_m",
+      "refr_t",
+      "I_kernel_exc__X__exc_spikes",
+      "I_kernel_inh__X__inh_spikes"
+    ]
+  },
+  {
+    "initial_values": {
+      "V_th_v": "0",
+      "V_th_v_aux": "0"
+    },
+    "parameters": {
+      "C_m": "200.000000000000",
+      "E_L": "-70.0000000000000",
+      "I_e": "0",
+      "alpha_1": "10.0000000000000",
+      "alpha_2": "0",
+      "beta": "0",
+      "omega": "-65.0000000000000",
+      "refr_T": "2.00000000000000",
+      "tau_1": "10.0000000000000",
+      "tau_2": "200.000000000000",
+      "tau_m": "10.0000000000000",
+      "tau_syn_exc": "1.00000000000000",
+      "tau_syn_inh": "3.00000000000000",
+      "tau_v": "5.00000000000000"
+    },
+    "solver": "numeric",
+    "state_variables": [
+      "V_th_v_aux",
+      "V_th_v"
+    ],
+    "update_expressions": {
+      "V_th_v": "-V_th_v/tau_v + V_th_v_aux",
+      "V_th_v_aux": "-V_th_v_aux/tau_v + (E_L*beta - V_m*beta)/tau_m + (I_e*beta + I_kernel_exc__X__exc_spikes*beta*unit_psc - I_kernel_inh__X__inh_spikes*beta*unit_psc + I_stim*beta)/C_m"
+    }
+  }
+]

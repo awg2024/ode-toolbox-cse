@@ -1,6 +1,6 @@
 from pathlib import Path
+from pynestml.codegeneration.nest_code_generator_utils import NESTCodeGeneratorUtils
 
-from pynestml.codedegneration.nest_code_generator_utils import NESTCodeGeneratorUtils
 
 NESTML_MODEL = Path("../tests/amat_neuron.nestml") # hard code path 
 

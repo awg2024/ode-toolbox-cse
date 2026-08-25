@@ -3,6 +3,7 @@
 .eggs
 .idea
 .venv/
+.scripts/
 build
 dist
 odetoolbox.egg-info

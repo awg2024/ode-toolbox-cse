@@ -26,6 +26,9 @@ import json
 
 
 """
+
+
+
 Independent Branch CSE: It ensures that when 'optimise_condition_branches=True', 
 CSE is applied to both the default track AND special singularity branches.
 Namespace Isolation: It proves that temporary CSE variables generated in one branch 
@@ -43,8 +46,6 @@ def test_condition_branches_cse_independently():
         "x y a b",
         real=True,
     )
-
-
 
     # Construct a mock solver profile containing a default region and a singularity region.
     # Note that both regions reuse the exact same subexpressions (x + y) and (x - y).
@@ -66,33 +67,36 @@ def test_condition_branches_cse_independently():
 
     # Isolate the processed output regions
     default_branch = (result["conditions"]["default"]) # default solver with no known singularities 
-    singularity_branch = (result["conditions"]["(tau_1 == tau_2)"]) # singularity branch 
+    singularity_branch = (result["conditions"]["(tau_1 == tau_2)"]) # singularity branch from l^hopital 
 
-    # test cse actually triggered and extracted terms 
+    print(f"Default Branch::: {default_branch}")
+    print(f"Singularity Branch::: {singularity_branch}")
+
+    # test cse actually triggered and extracted terms in these branches
     assert "cse" in default_branch
     assert "cse" in singularity_branch
 
-    # [(temporary_var, original_expression)]
+    # extract [(temporary_var, original_expression)] from default solver; update_expression  
     default_replacements = (
         default_branch["cse"]
         ["update_expressions"]
     )
 
+    # extract [(temporary_var, original_expression)] from singularity branch; update_expression  
     singular_replacements = (
         singularity_branch["cse"]
         ["update_expressions"]
     )
 
-    assert default_replacements
+    assert default_replacements # do they exist? 
     assert singular_replacements
 
     # Collect only the left-hand names of the replacements (the new variable names)
     default_symbols = {temporary for temporary, _ in default_replacements}
     singular_symbols = {temporary for temporary, _ in singular_replacements}
 
-    # No variable name generated in the default branch exists in the singularity branch.
-    # If this fails, the downstream C++ generator will overwrite variables and cross wires.
-    assert default_symbols.isdisjoint(singular_symbols)
+    # No variable name generated in the default branch exists in the singularity branch
+    assert default_symbols.isdisjoint(singular_symbols) # if this fails c++ will overwrite these variables and cause conflicts 
 
     for condition, original_branch in (
         
@@ -103,10 +107,11 @@ def test_condition_branches_cse_independently():
         replacements = (optimized_branch.get("cse", {}).get("update_expressions",[]))
 
         for variable, original in (
+            
             original_branch["update_expressions"].items()):
 
             reduced = (optimized_branch["update_expressions"][variable])
-            restored = restore_cse_expression(reduced,replacements,)
+            restored = restore_cse_expression(reduced,replacements) # restore the cse equations back to the original form 
 
-            assert sympy.simplify(restored - original) == 0
+            assert sympy.simplify(restored - original) == 0 # ensure the original equations equal 
 

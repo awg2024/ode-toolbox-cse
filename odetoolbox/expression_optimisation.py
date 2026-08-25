@@ -48,6 +48,7 @@ def common_subexpression_elimination(expressions, symbol_prefix="__ode_cse_tmp__
 
     #  infinite generator for the temp local variables to hold isolated math subexpressions 
     temporary_symbols = sympy.numbered_symbols(symbol_prefix) 
+    # TO DO: we could enable the user to declare their own tmp variable names? 
 
     # perform cse
     replacements, reduced_values = sympy.cse( 
@@ -66,9 +67,9 @@ def common_subexpression_elimination(expressions, symbol_prefix="__ode_cse_tmp__
 def restore_cse_expression(expression, replacements):
     # reversal of cse back to the original form. 
 
-    restored = expression # creates copy 
+    restored = expression # sypy expressions are immutable, each subs() returns a transformed expression 
 
-    for temporary, replacement_expression in reversed(replacements): # reversed as later temp depends on earlier 
+    for temporary, replacement_expression in reversed(replacements): # reversed as later temp variables depends on earlier definitions 
         restored = restored.subs(temporary, replacement_expression) #.subs finds temporary variable and swaps it for it's actual mathematical replacement 
     
     return restored 
@@ -114,7 +115,7 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
         # wrap condition, branch so python understand how to unpack a sub-tuple 
         for branch_index, (condition, branch) in enumerate(solver["conditions"].items()):
 
-            branch_prefix = (symbol_prefix + f"cond_{branch_index}") # distinct condition blocks get their own unique prefix
+            branch_prefix = (symbol_prefix + f"cond_{branch_index}_") # distinct condition blocks get their own unique prefix
 
             optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix) # apply cse to each independent branch 
 

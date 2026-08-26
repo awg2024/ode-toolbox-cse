@@ -27,7 +27,7 @@ import sympy
 from sympy.core.expr import Expr as SympyExpr
 
 from .config import Config
-from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _find_in_matrix, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real
+from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
@@ -89,6 +89,7 @@ def _find_analytically_solvable_equations(shape_sys, shapes, parameters=None):
             if not i == j and not _is_zero(shape_sys.A_[i, j]) and not _is_zero(shape_sys.b_[_find_in_matrix(shape_sys.x_, shape_sys.x_[j])]):
                 # this shape depends on another ODE that is inhomogeneous -- can't be solved analytically by this version of ODE-toolbox (cascading analytical solution)
                 node_is_analytically_solvable[shape_sys.x_[i]] = False
+            node_is_analytically_solvable[shape_sys.x_[i]] = False
 
     # propagating the judgement, if variable a depends on variable b && variable b (unsolvable) therefore a is unsolvable 
     node_is_analytically_solvable = shape_sys.propagate_lin_cc_judgements(node_is_analytically_solvable, dependency_edges)

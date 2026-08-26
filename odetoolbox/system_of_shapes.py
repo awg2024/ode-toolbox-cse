@@ -351,6 +351,9 @@ class SystemOfShapes:
                 if not _is_zero(P[row, col]):
                     sym_str = Config().propagators_prefix + "__{}__{}".format(str(self.x_[row]), str(self.x_[col]))
                     P_expr[sym_str] = P[row, col]
+                    
+                    # (PR 107 removes a secondary guard for ODE neighbour analytical checks making it less strict)
+                    
                     update_expr_terms.append(sym_str + " * " + str(self.x_[col]))
 
             if not _is_zero(self.b_[row]):

@@ -27,7 +27,7 @@ import sympy
 from sympy.core.expr import Expr as SympyExpr
 
 from .config import Config
-from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real
+from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real # (PR107) removed _find_in_matrix logic helper function 
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
 
@@ -83,14 +83,9 @@ def _find_analytically_solvable_equations(shape_sys, shapes, parameters=None):
     # cannot analytically solve inhomogeneous, order > 1 shapes
     for i in range(len(shape_sys.x_)): 
         if not _is_zero(shape_sys.b_[i]) and shape_sys.shape_order_from_system_matrix(i) > 1 and shape_sys.x_[i] in shape_sys.get_connected_symbols(i):
-            
-            node_is_analytically_solvable[shape_sys.x_[i]] = False # too complex for an analytical solver (#PR107)
-
-        for j in range(len(shape_sys.x_)):
-            if not i == j and not _is_zero(shape_sys.A_[i, j]) and not _is_zero(shape_sys.b_[_find_in_matrix(shape_sys.x_, shape_sys.x_[j])]):
-                # this shape depends on another ODE that is inhomogeneous -- can't be solved analytically by this version of ODE-toolbox (cascading analytical solution)
-                node_is_analytically_solvable[shape_sys.x_[i]] = False
             node_is_analytically_solvable[shape_sys.x_[i]] = False
+
+    # (#PR107) removes the logic by _find_in_matrix for dependencies of neighbour ODE terms 
 
     # propagating the judgement, if variable a depends on variable b && variable b (unsolvable) therefore a is unsolvable 
     node_is_analytically_solvable = shape_sys.propagate_lin_cc_judgements(node_is_analytically_solvable, dependency_edges)

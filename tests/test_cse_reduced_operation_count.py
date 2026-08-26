@@ -51,4 +51,3 @@ def test_cse_preserves_expression():
     # enforce logic that optimisation must decrease operations 
     assert after < before, f"Optimisation failed, cost did not decrease. Before: {before}. After: {after}"
 
-

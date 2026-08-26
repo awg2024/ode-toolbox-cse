@@ -4,11 +4,7 @@ from pprint import pprint
 
 import odetoolbox
 
-
-# ============================================================
-# 1. FIND THE REPOSITORY ROOT
-# ============================================================
-
+# define repo roots 
 # This script lives inside:
 #
 # ode-toolbox-cse/scripts/inspect_amat_cse.py
@@ -26,10 +22,7 @@ REPO_ROOT = os.path.dirname(
 )
 
 
-# ============================================================
-# 2. DEFINE INPUT / OUTPUT LOCATIONS
-# ============================================================
-
+# out and input dirs 
 INPUT_FILE = os.path.join(
     REPO_ROOT,
     "scripts",
@@ -49,7 +42,6 @@ os.makedirs(
     exist_ok=True,
 )
 
-
 BASELINE_OUTPUT = os.path.join(
     OUTPUT_DIR,
     "amat_solver_baseline.json",
@@ -66,174 +58,75 @@ CSE_CONDITIONS_OUTPUT = os.path.join(
 )
 
 
-# ============================================================
-# 3. LOAD THE AMAT ODE-TOOLBOX INPUT
-# ============================================================
 
 print("\nLoading AMAT ODE-toolbox input from:")
 print(INPUT_FILE)
 
 
-with open(
-    INPUT_FILE,
-    "r",
-    encoding="utf-8",
-) as file:
+with open(INPUT_FILE,"r",encoding="utf-8") as file: # read only, utf-8 reads text characters 
 
-    model = json.load(file)
-
+    model = json.load(file) # load json 
 
 print("\nAMAT input loaded successfully.")
 
 
-# ============================================================
-# 4. RUN BASELINE
-# ============================================================
-
-print(
-    "\n"
-    "============================================================\n"
-    "RUN 1: BASELINE — NO CSE\n"
-    "============================================================"
-)
-
+# baseline no cse implemented 
+print("RUN 1: BASELINE — NO CSE")
 
 baseline = odetoolbox.analysis(
     model,
-
     # We do not need PyGSL for this experiment.
     disable_stiffness_check=True,
-
     # Ordinary ODE-toolbox behaviour.
     enable_cse=False,
 )
-
-
-# ============================================================
-# 5. RUN CSE WITHOUT CONDITION-BRANCH OPTIMISATION
-# ============================================================
-
-print(
-    "\n"
-    "============================================================\n"
-    "RUN 2: CSE — CONDITIONS LEFT UNTOUCHED\n"
-    "============================================================"
-)
-
+print("run 2 - cse, conditions left untouched")
 
 cse = odetoolbox.analysis(
     model,
-
     disable_stiffness_check=True,
-
     enable_cse=True,
-
-    # Important:
-    # singularity branches remain exactly as generated
-    # by ODE-toolbox.
-    enable_cse_condition_branches=False,
+    enable_cse_condition_branches=False, # don't touch conitions 
 )
 
-
-# ============================================================
-# 6. RUN CSE INCLUDING INDEPENDENT CONDITION BRANCHES
-# ============================================================
-
-print(
-    "\n"
-    "============================================================\n"
-    "RUN 3: CSE — CONDITION BRANCH CSE ENABLED\n"
-    "============================================================"
-)
+print("run 3 cse, singularity flag turned on")
 
 
 cse_conditions = odetoolbox.analysis(
     model,
-
     disable_stiffness_check=True,
-
     enable_cse=True,
-
     # Each singularity branch gets its OWN local CSE.
     enable_cse_condition_branches=True,
 )
 
-
-# ============================================================
-# 7. HELPER FUNCTION FOR SAVING JSON
-# ============================================================
-
 def save_json(data, filename):
-
     with open(
         filename,
         "w",
         encoding="utf-8",
     ) as file:
-
         json.dump(
             data,
             file,
             indent=2,
-            sort_keys=True,
-        )
+            sort_keys=True)
 
-    print(
-        "Saved:",
-        filename,
-    )
+    print("Saved:",filename)
 
 
-# ============================================================
-# 8. SAVE ALL THREE OUTPUTS
-# ============================================================
-
-print(
-    "\n"
-    "============================================================\n"
-    "SAVING OUTPUT FILES\n"
-    "============================================================"
-)
+print("save output files")
 
 
-save_json(
-    baseline,
-    BASELINE_OUTPUT,
-)
-
-
-save_json(
-    cse,
-    CSE_OUTPUT,
-)
-
-
-save_json(
-    cse_conditions,
-    CSE_CONDITIONS_OUTPUT,
-)
-
-
-# ============================================================
-# 9. HELPER FOR PRINTING SOLVER STRUCTURE
-# ============================================================
+save_json(baseline,BASELINE_OUTPUT)
+save_json(cse,CSE_OUTPUT)
+save_json(cse_conditions,CSE_CONDITIONS_OUTPUT)
 
 def inspect_solver_collection(
     title,
-    solver_collection,
-):
-
-    print(
-        "\n"
-        "============================================================"
-    )
+    solver_collection):
 
     print(title)
-
-    print(
-        "============================================================"
-    )
-
     for index, solver in enumerate(
         solver_collection
     ):
@@ -325,11 +218,6 @@ def inspect_solver_collection(
                         "  No branch-local CSE."
                     )
 
-
-# ============================================================
-# 10. PRINT THE THREE RESULTS
-# ============================================================
-
 inspect_solver_collection(
     "BASELINE",
     baseline,
@@ -345,18 +233,6 @@ inspect_solver_collection(
 inspect_solver_collection(
     "CSE — CONDITION BRANCHES ENABLED",
     cse_conditions,
-)
-
-
-# ============================================================
-# 11. FINAL SUMMARY
-# ============================================================
-
-print(
-    "\n"
-    "============================================================\n"
-    "DONE\n"
-    "============================================================"
 )
 
 print(

@@ -54,7 +54,8 @@ def get_block_diagonal_blocks(A):
     # checking the step differences between the matrices. we want our sub-matrices to be grouped closely. 
     if not all(np.diff(graph_components) >= 0):
         # matrix is not ordered
-        raise GetBlockDiagonalException()
+        # WARNING matrix might be matheamtically block decomposible but still fails this optimisation purely because state variables aren't close together? 
+        raise GetBlockDiagonalException() 
 
     blocks = []
     for i in np.unique(graph_components): # code block for slicing out independent lobkcs 
@@ -280,8 +281,10 @@ class SystemOfShapes:
                     #    generate all combinations of conditions
                     #
 
-                    num_conditions = len(conditions) # number of conditions of singularities we need to be aware of 
 
+                    # ERROR propagation explosion occuring here for every permutation in the ode toolbox for singularities and applies equalties and creates a new system of shapes 
+
+                    num_conditions = len(conditions) # number of conditions of singularities we need to be aware of 
                     condition_permutations = list(itertools.product([False, True], repeat=num_conditions)) # maps out every possible combination of these conditions with a true/false
 
                     logging.getLogger(__name__).info("Alternate solvers will be generated for each of these conditions (and combinations thereof), which amounts to " + str(len(condition_permutations)) + " solvers that will be generated.")
@@ -311,6 +314,7 @@ class SystemOfShapes:
                         conditional_b = self.b_.copy()
                         conditional_c = self.c_.copy()
 
+                        # ERROR creating impossible branches that the dependencies don't actually depend on leading to the explosion 
                         for eq in cond_set:
                             if isinstance(eq, SymmetricEq):
                                 # replace equalities (not inequalities)
@@ -323,6 +327,8 @@ class SystemOfShapes:
                         solver_dict["conditions"][condition_str] = {"propagators": solver_dict_conditional["propagators"],
                                                                     "update_expressions": solver_dict_conditional["update_expressions"]}
 
+                    # cleans up after the expensive combinations have been created 
+                    # finds branches with identical propagators and update_conditions explains enormous condition keys in json 
                     solver_dict = self._merge_conditions(solver_dict) # simplifies logic scans through generated dict structure before exported to JSON template 
 
                     return solver_dict

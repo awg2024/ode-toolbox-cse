@@ -310,7 +310,10 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
     if analytic_syms:
         logging.getLogger(__name__).info("Generating propagators for the following symbols: " + ", ".join([str(k) for k in analytic_syms]))
         sub_sys = shape_sys.get_sub_system(analytic_syms)
+        
+        # analytical subsystem chosen calling generate propagrator solver
         analytic_solver_json = sub_sys.generate_propagator_solver(disable_singularity_detection=disable_singularity_detection, disable_singularity_mitigation=disable_singularity_mitigation, use_alternative_expM=use_alternative_expM)
+        
         analytic_solver_json["solver"] = "analytical"
         solvers_json.append(analytic_solver_json)
 

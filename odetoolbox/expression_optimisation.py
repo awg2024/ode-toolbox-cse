@@ -76,21 +76,53 @@ def restore_cse_expression(expression, replacements):
 
 
 def count_operations(expressions):
+    total = 0
 
-    return sum( # counting number of mathematical operations from the original equation 
-        int(sympy.count_ops(expression))
-        for expression in expressions
+    for expression in expressions:
+        if isinstance(expression, str):
+            expression = sympy.sympify(
+                expression,
+                locals={
+                    "exp": sympy.exp,
+                }
+            )
+
+        total += int(sympy.count_ops(expression))
+
+    return total
+
+
+def count_cse_operations(
+    replacements,
+    reduced_expressions,
+    locals_dict,
+):
+
+    replacement_cost = sum(
+        int(
+            sympy.count_ops(
+                parse_expression(
+                    item["expression"],
+                    locals_dict,
+                )
+            )
+        )
+        for item in replacements
     )
 
-def count_cse_operations(replacements, reduced_expressions): 
+    reduced_cost = sum(
+        int(
+            sympy.count_ops(
+                parse_expression(
+                    expression,
+                    locals_dict,
+                )
+            )
+        )
+        for expression in reduced_expressions.values()
+    )
 
-    # count operations in the main simplified equations
-    reduced_cost = sum(int(sympy.count_ops(expr)) for expr in reduced_expressions.values())
-
-    # Count operations inside the temporary placeholder variables
-    replacement_cost = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
-
-    return replacement_cost + reduced_cost # total final cost of expressions and temporary values 
+    return (replacement_cost + reduced_cost)
 
 
 def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_branches=False): 
@@ -202,6 +234,39 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         result["cse"] = cse_data # output data 
 
     return result
+
+
+def make_locals(model):
+    symbol_names = set()
+
+    symbol_names.update(model.get("parameters", {}).keys())
+    symbol_names.update(model.get("state_variables", []))
+
+    symbol_names.update([
+        "__h",
+        "unit_psc",
+    ])
+
+    # CSE symbols
+    for item in model.get("cse", {}).get("propagators", []):
+        symbol_names.add(item["symbol"])
+
+    for item in model.get("cse", {}).get("update_expressions", []):
+        symbol_names.add(item["symbol"])
+
+    return {
+        name: sympy.Symbol(name)
+        for name in symbol_names
+    }
+
+
+def parse_expression(expression, locals_dict):
+    return sympy.sympify(
+        expression,
+        locals=locals_dict,
+    )
+
+
 
 
 def _contains_nonfinite_expression(expressions):

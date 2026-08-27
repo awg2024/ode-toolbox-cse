@@ -52,37 +52,29 @@ def get_block_diagonal_blocks(A):
     # creating symmetric boolean matrix where an edge (1) exists if two varibles influence eachother (undirected graph)
     graph_components = scipy.sparse.csgraph.connected_components(A_connectivity_undirected)[1]
 
-    # reordering the diagonal blocks 
-    # if not all(np.diff(graph_components) >= 0): # if the blocks aren't contigious
-    #     # Find the sorting map that groups matching component IDs together
-    #     permutation = np.argsort(graph_components, kind="stable")
-        
-    #     # Re-arrange the rows and columns of the system matrix A in memory
-    #     A = A[np.ix_(permutation, permutation)] # use np.ix_ here because A is a SymPy object matrix
-        
-    #     # update the component array so it matches our newly sorted matrix layout
-    #     graph_components = graph_components[permutation]
- 
-    # checking for ordering and testing if blocks are contigious 
-    if not all(np.diff(graph_components) >= 0):
-        raise GetBlockDiagonalException() 
+    # group states belonging to the same component
+    permutation = np.argsort(graph_components, kind="stable")
 
+    # Re-arrange the rows and columns of the system matrix A in memory
+    A_reordered = A[np.ix_(permutation, permutation)] # use np.ix_ here because A is a SymPy object matrix
+
+    reordered_components = (graph_components[permutation])
+
+    # extract contigous blocks 
     blocks = []
-    for i in np.unique(graph_components): # code block for slicing out independent blocks 
-        idx = np.where(graph_components == i)[0]
 
-        if not all(np.diff(idx) > 0) or not (len(idx) == 1 or (len(np.unique(np.diff(idx))) == 1 and np.unique(np.diff(idx))[0] == 1)):
-            raise GetBlockDiagonalException() # checks for proximity of the blocks again for contigious input 
+    for component in np.unique(reordered_components): # for each isolated group of variables 
 
-        # for each isolated group of variables 
-        idx_min = np.amin(idx) 
-        idx_max = np.amax(idx)
-        block = A[idx_min:idx_max + 1, idx_min:idx_max + 1]  # assert assigned previously to ensure indices form a contiguous sequence of ints 
+        indices = np.where(reordered_components == component)[0]
+
+        idx_min = np.min(indices) 
+        idx_max = np.max(indices)
+        # assert assigned previously to ensure indices form a contiguous sequence of ints 
+        block = A_reordered[idx_min:idx_max + 1, idx_min:idx_max + 1]  
         blocks.append(block)
 
-    return blocks # diagonalized blocks returned 
+    return blocks, permutation  # diagonalized blocks returned 
 
-    # not passing permutations bacK? 
 
 class PropagatorGenerationException(Exception):
     """
@@ -228,13 +220,21 @@ class SystemOfShapes:
             logging.getLogger(__name__).debug("Computing propagator matrix (block-diagonal optimisation)...")
             
             # get diagnoal blocks per matrix diagonal element of ``A`` && perform reordering of components if needed to avoid non-contigious output
-            blocks = get_block_diagonal_blocks(np.array(A))
+            blocks, permutation = get_block_diagonal_blocks(np.array(A))
+
+            h = sympy.Symbol(Config().output_timestep_symbol, real=True)
             
-            # for block of matrix A calculate the propagator 
+            # for block of matrix A calculate the 'reordered' propagator 
             propagators = [_custom_simplify_expr(expM(sympy.Matrix(block) * sympy.Symbol(Config().output_timestep_symbol, real=True))) for block in blocks]
             
-            P = sympy.Matrix(scipy.linalg.block_diag(*propagators))
-        
+            # matrix is currently in grouped-component order
+            P_reordered = sympy.diag(*propagators)
+
+            # resotre original state ordering 
+            inverse_permutation = np.argsort(permutation)
+            original_indices = (inverse_permutation.tolist())
+            P = P_reordered.extract(original_indices, original_indices)
+
         except GetBlockDiagonalException:
             # naive: calculate propagators in one step -- can be quite slow if ``A`` is a large matrix
             logging.getLogger(__name__).debug("Computing propagator matrix...")
@@ -300,7 +300,6 @@ class SystemOfShapes:
 
 
                     # ERROR propagation explosion occuring here for every permutation in the ode toolbox for singularities and applies equalties and creates a new system of shapes 
-
                     num_conditions = len(conditions) # number of conditions of singularities we need to be aware of 
                     condition_permutations = list(itertools.product([False, True], repeat=num_conditions)) # maps out every possible combination of these conditions with a true/false
 
@@ -340,6 +339,8 @@ class SystemOfShapes:
                                 conditional_c = conditional_c.subs(eq.lhs, eq.rhs)
 
                         conditional_dynamics = SystemOfShapes(self.x_, conditional_A, conditional_b, conditional_c, self.shapes_)
+                        
+                        # for every non-default branch we still loop over every combination (even if mathematcally impossible)
                         solver_dict_conditional = conditional_dynamics.generate_propagator_solver(disable_singularity_detection=True, disable_singularity_mitigation=True, use_alternative_expM=use_alternative_expM)
                         solver_dict["conditions"][condition_str] = {"propagators": solver_dict_conditional["propagators"],
                                                                     "update_expressions": solver_dict_conditional["update_expressions"]}

@@ -1,43 +1,27 @@
 import itertools
 import time
-
 import sympy
-
-from amat_diagnostic_utils import (
-    build_amat_system,
-)
-
-from odetoolbox.singularity_detection import (
-    SingularityDetection,
-)
-
-from odetoolbox.sympy_helpers import (
-    SymmetricEq,
-)
+from amat_diagnostic_utils import (build_amat_system)
+from odetoolbox.singularity_detection import (SingularityDetection)
+from odetoolbox.sympy_helpers import (SymmetricEq)
 
 
-(
-    model,
-    shape_sys,
-    analytic_sys,
-    classification,
-) = build_amat_system()
+"""
+This script is utilised after the contigious and non-contigious checks investigating 
+why would we get an explosion of 64 combinations singularity checks globally on a 8x8 matrix? 
+Is there a problem with the generate_propagator_matrix function? or something upstream? 
+"""
 
 
-print(
-    "\nGenerating ONE propagator..."
-)
+# helper function 
+(model,shape_sys,analytic_sys,classification) = build_amat_system()
 
+print("Generating one propagator")
 
 start = time.perf_counter()
 
-
-P = (
-    analytic_sys
-    ._generate_propagator_matrix(
-        analytic_sys.A_
-    )
-)
+# generate propaga
+P = (analytic_sys._generate_propagator_matrix(analytic_sys.A_))
 
 
 print(

@@ -44,6 +44,7 @@ class GetBlockDiagonalException(Exception):
 
 
 def get_block_diagonal_blocks(A):
+    
     assert A.shape[0] == A.shape[1], "matrix A should be square" # maps set of variables to the derivatives 
 
     A_connectivity_undirected = (A != 0) | (A.T != 0)    # make symmetric (undirected) connectivity graph from the system matrix
@@ -51,18 +52,27 @@ def get_block_diagonal_blocks(A):
     # creating symmetric boolean matrix where an edge (1) exists if two varibles influence eachother (undirected graph)
     graph_components = scipy.sparse.csgraph.connected_components(A_connectivity_undirected)[1]
 
-    # checking the step differences between the matrices. we want our sub-matrices to be grouped closely. 
+    # reordering the diagonal blocks 
+    # if not all(np.diff(graph_components) >= 0): # if the blocks aren't contigious
+    #     # Find the sorting map that groups matching component IDs together
+    #     permutation = np.argsort(graph_components, kind="stable")
+        
+    #     # Re-arrange the rows and columns of the system matrix A in memory
+    #     A = A[np.ix_(permutation, permutation)] # use np.ix_ here because A is a SymPy object matrix
+        
+    #     # update the component array so it matches our newly sorted matrix layout
+    #     graph_components = graph_components[permutation]
+ 
+    # checking for ordering and testing if blocks are contigious 
     if not all(np.diff(graph_components) >= 0):
-        # matrix is not ordered
-        # WARNING matrix might be matheamtically block decomposible but still fails this optimisation purely because state variables aren't close together? 
         raise GetBlockDiagonalException() 
 
     blocks = []
-    for i in np.unique(graph_components): # code block for slicing out independent lobkcs 
+    for i in np.unique(graph_components): # code block for slicing out independent blocks 
         idx = np.where(graph_components == i)[0]
 
         if not all(np.diff(idx) > 0) or not (len(idx) == 1 or (len(np.unique(np.diff(idx))) == 1 and np.unique(np.diff(idx))[0] == 1)):
-            raise GetBlockDiagonalException()
+            raise GetBlockDiagonalException() # checks for proximity of the blocks again for contigious input 
 
         # for each isolated group of variables 
         idx_min = np.amin(idx) 
@@ -72,6 +82,7 @@ def get_block_diagonal_blocks(A):
 
     return blocks # diagonalized blocks returned 
 
+    # not passing permutations bacK? 
 
 class PropagatorGenerationException(Exception):
     """
@@ -215,9 +226,15 @@ class SystemOfShapes:
         try:
             # optimized: compute propagators separately for each block diagonal element of ``A``
             logging.getLogger(__name__).debug("Computing propagator matrix (block-diagonal optimisation)...")
+            
+            # get diagnoal blocks per matrix diagonal element of ``A`` && perform reordering of components if needed to avoid non-contigious output
             blocks = get_block_diagonal_blocks(np.array(A))
+            
+            # for block of matrix A calculate the propagator 
             propagators = [_custom_simplify_expr(expM(sympy.Matrix(block) * sympy.Symbol(Config().output_timestep_symbol, real=True))) for block in blocks]
+            
             P = sympy.Matrix(scipy.linalg.block_diag(*propagators))
+        
         except GetBlockDiagonalException:
             # naive: calculate propagators in one step -- can be quite slow if ``A`` is a large matrix
             logging.getLogger(__name__).debug("Computing propagator matrix...")

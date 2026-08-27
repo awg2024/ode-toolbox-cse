@@ -1,7 +1,5 @@
 import json
-
 import sympy
-
 from odetoolbox import (
     _read_global_config,
     _from_json_to_shapes,
@@ -13,8 +11,14 @@ from odetoolbox.system_of_shapes import (
 )
 
 
+"""
+This script is used as a utility helper definition area
+to help build the amat system and test it as it passes through 
+the odetoolbox. 
+"""
+
 def build_amat_system(
-    input_file="amat_json/amat_ode_toolbox_input.json",
+    input_file="json_testfile/amat_ode_toolbox_input.json",
 ):
     """
     Load the captured AMAT ODE-toolbox input and

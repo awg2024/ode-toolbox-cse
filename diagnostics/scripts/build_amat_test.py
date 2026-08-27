@@ -1,18 +1,9 @@
 import json
 import os
 from pprint import pprint
-
 import odetoolbox
 
-# define repo roots 
-# This script lives inside:
-#
-# ode-toolbox-cse/scripts/inspect_amat_cse.py
-#
-# So:
-# dirname(__file__)                  -> scripts/
-# dirname(dirname(__file__))         -> ode-toolbox-cse/
-#
+# we need to adjust these paths for the diagnostics utils 
 SCRIPT_DIR = os.path.dirname(
     os.path.abspath(__file__)
 )
@@ -20,7 +11,6 @@ SCRIPT_DIR = os.path.dirname(
 REPO_ROOT = os.path.dirname(
     SCRIPT_DIR
 )
-
 
 # out and input dirs 
 INPUT_FILE = os.path.join(
@@ -57,7 +47,8 @@ CSE_CONDITIONS_OUTPUT = os.path.join(
     "amat_solver_cse_conditions.json",
 )
 
-
+INPUT_FILE = r"json_testfile/amat_ode_toolbox_input.json"
+CSE_OUPUT = r"outputs/"
 
 print("\nLoading AMAT ODE-toolbox input from:")
 print(INPUT_FILE)
@@ -71,34 +62,33 @@ print("\nAMAT input loaded successfully.")
 
 
 # baseline no cse implemented 
-print("RUN 1: BASELINE — NO CSE")
+print("baseline amat building, no cse activated. ")
 
 baseline = odetoolbox.analysis(
     model,
     # We do not need PyGSL for this experiment.
     disable_stiffness_check=True,
     # Ordinary ODE-toolbox behaviour.
+    disable_singularity_mitigation=True,
     enable_cse=False,
 )
-print("run 2 - cse, conditions left untouched")
 
-cse = odetoolbox.analysis(
-    model,
-    disable_stiffness_check=True,
-    enable_cse=True,
-    enable_cse_condition_branches=False, # don't touch conitions 
-)
+# print("run 2 - cse, conditions left untouched")
+# cse = odetoolbox.analysis(
+#     model,
+#     disable_stiffness_check=True,
+#     enable_cse=True,
+#     enable_cse_condition_branches=False, # don't touch conitions 
+# )
 
-print("run 3 cse, singularity flag turned on")
-
-
-cse_conditions = odetoolbox.analysis(
-    model,
-    disable_stiffness_check=True,
-    enable_cse=True,
-    # Each singularity branch gets its OWN local CSE.
-    enable_cse_condition_branches=True,
-)
+# print("run 3 cse, singularity flag turned on")
+# cse_conditions = odetoolbox.analysis(
+#     model,
+#     disable_stiffness_check=True,
+#     enable_cse=True,
+#     # Each singularity branch gets its OWN local CSE.
+#     enable_cse_condition_branches=True,
+# )
 
 def save_json(data, filename):
     with open(

@@ -76,13 +76,64 @@ def restore_cse_expression(expression, replacements):
 
 
 def count_operations(expressions):
+    total = 0
 
-    return sum( # counting number of mathematical operations from the original equation
+    for expression in expressions:
+        if isinstance(expression, str):
+            expression = sympy.sympify(
+                expression,
+                locals={
+                    "exp": sympy.exp,
+                }
+            )
+
+        total += int(sympy.count_ops(expression))
+
+    return total
+
+
+# json file changes we need to look into 
+# def count_cse_operations(
+#     replacements,
+#     reduced_expressions,
+#     locals_dict,
+# ):
+
+#     replacement_cost = sum(
+#         int(
+#             sympy.count_ops(
+#                 parse_expression(
+#                     item["expression"],
+#                     locals_dict,
+#                 )
+#             )
+#         )
+#         for item in replacements
+#     )
+
+#     reduced_cost = sum(
+#         int(
+#             sympy.count_ops(
+#                 parse_expression(
+#                     expression,
+#                     locals_dict,
+#                 )
+#             )
+#         )
+#         for expression in reduced_expressions.values()
+#     )
+
+#     return (replacement_cost + reduced_cost)
+
+
+def count_operations(expressions):
+
+    return sum( # counting number of mathematical operations from the original equation 
         int(sympy.count_ops(expression))
         for expression in expressions
     )
 
-def count_cse_operations(replacements, reduced_expressions):
+def count_cse_operations(replacements, reduced_expressions): 
 
     # count operations in the main simplified equations
     reduced_cost = sum(int(sympy.count_ops(expr)) for expr in reduced_expressions.values())
@@ -90,7 +141,8 @@ def count_cse_operations(replacements, reduced_expressions):
     # Count operations inside the temporary placeholder variables
     replacement_cost = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
 
-    return replacement_cost + reduced_cost # total final cost of expressions and temporary values
+    return replacement_cost + reduced_cost # total final cost of expressions and temporary values 
+
 
 
 def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_branches=False):

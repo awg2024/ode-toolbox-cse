@@ -377,6 +377,19 @@ class SystemOfShapes:
                     
                     # (PR 107 removes a secondary guard for ODE neighbour analytical checks making it less strict)
                     
+                    # reverting PR 107 
+                    if row != col and not _is_zero(self.b_[col]):
+
+                        print("coupled inhomogenous system")
+                        print(f"row: {self.x_[row]} depends on {self.x_[col]} b[col] {self.b_[col]} + P[row, col] = {P[row, col]}")
+
+                        raise PropagatorGenerationException(
+                            f"the ode for {self.x_[row]} depends on the inhomogenous ode of {self.x_[row]} we can't solve this analytically"
+                        )
+
+
+
+
                     update_expr_terms.append(sym_str + " * " + str(self.x_[col]))
 
             if not _is_zero(self.b_[row]):

@@ -181,16 +181,11 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
 def serialize_replacements(replacements):
     """
-    Convert CSE replacement tuples to JSON-safe data (high-level dicts: update_expressions, propagators)
+    Convert CSE replacement tuples to JSON-safe data collection of expressions safe for NESTML code gen 
     """
     # import pdb;pdb.set_trace()
-    # return [{
-    #         "symbol": str(symbol),
-    #         "expression": str(expression)}
-    #         for symbol, expression in replacements]
 
     ret = {}
-
     for symbol, expr in replacements:
         ret[str(symbol)] = str(expr)
 

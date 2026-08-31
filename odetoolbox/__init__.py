@@ -237,26 +237,6 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
     logging.getLogger(__name__).info("Analysing input:")
     logging.getLogger(__name__).info(json.dumps(indict, indent=4, sort_keys=True))
 
-    # ======= temporary amat test =======
-    """
-    prints structured json version of the incoming dict to systemlogs for visibility. looks for specific environment named ODETOOLBOX_CAPTURE_INPUT. if that 
-    variable exists the scrtips automatically creates the necessary folders and saves the internal data (indict) into a text file path at that path. crash if it cannot be found. 
-    """
-
-    import os 
-    from pathlib import Path
-
-    capture_path = os.environ.get("ODETOOLBOX_CAPTURE_INPUT")
-    if capture_path:
-        capture_path = Path(capture_path)
-        capture_path.parent.mkdir(parents=True,exist_ok=True)
-        with capture_path.open("w", encoding="utf-8") as capture_file:
-            json.dump(indict, capture_file, indent=4, sort_keys=True)
-        logging.getLogger(__name__).info("captured ode toolbox input to %s", capture_path)
-        if os.environ.get("ODETOOLBOX_CAPTURE_INPUT") == "1": 
-            raise SystemExit(0) # makes the Pygsl error irrelevent. 
-    # ======= temporary amat test  =======
-
     if "dynamics" not in indict:
         logging.getLogger(__name__).info("Warning: empty input (no dynamical equations found); returning empty output")
         return [], SystemOfShapes.from_shapes([]), []

@@ -34,6 +34,8 @@ from .config import Config
 from .shapes import Shape
 from .singularity_detection import SingularityDetection, SingularityDetectionException
 from .sympy_helpers import SymmetricEq, _custom_simplify_expr, _is_zero, expMt, _sympy_parse_real
+from sympy.matrices.exceptions import NonInvertibleMatrixError 
+
 
 
 class GetBlockDiagonalException(Exception):
@@ -355,65 +357,93 @@ class SystemOfShapes:
 
         return self.generate_solver_dict_based_on_propagator_matrix_(P)
 
+
     def generate_solver_dict_based_on_propagator_matrix_(self, P: sympy.Matrix):
-        #   generate symbols for each nonzero entry of the propagator matrix
-        
 
-        P_expr = {}     # the expression corresponding to each propagator symbol
-        update_expr = {}    # keys are str(variable symbol), values are str(expressions) that evaluate to the new value of the corresponding key
+        #
+        # generate symbols for each nonzero entry of the propagator matrix 
+        #
+
+        P_expr = {} # the expression corresponding to each propagator symbol
+        update_expr = {}  # keys are str(variable symbol), values are str(expressions) that evaluate to the new value of the corresponding key
+
+        connectivity = np.zeros(self.A_.shape, dtype=int)  # Find connected components of the system matrix
+
+        for row in range(self.A_.shape[0]):
+            for col in range(self.A_.shape[1]): 
+
+                # build a connectivity matrix from A_ marking which state variables are linked by a nonzero coefficient 
+                if (not _is_zero(self.A_[row, col]) or not _is_zero(self.A_[col, row])):
+                    connectivity[row, col] = 1 
+
+        # find connected components, grouping state variables into clusters that are coupled 
+        _, component_labels = scipy.sparse.csgraph.connected_components(
+            scipy.sparse.csr_matrix(connectivity),
+            directed=False)
+
+        # Compute a particular solution for individual coupled inhomogeneous blocks
+        particular_solutions = {}
+
+        for component in set(component_labels): # for each cluster with a nonzero inhomogenous part 
+
+            indices = [i for i, label in enumerate(component_labels) if label == component]
+
+            A_block = self.A_.extract(indices, indices)
+            b_block = self.b_.extract(indices, [0])
+
+            if all(_is_zero(b_block[i, 0]) for i in range(len(indices))):
+                continue 
+
+            # Preserve the existing treatment of x' = b (old isolated row apporach)
+            if (len(indices) == 1 and _is_zero(A_block[0, 0])):
+                continue
+
+            try: # extracts the corresponding sub-matrix/sub-vector and solves the whole block via matrix inversion
+                x_particular = -(A_block.inv() * b_block)
+
+            except NonInvertibleMatrixError as exc: # if a blocks matrix is not invertible, eq may not have the inverse of matrix A?
+                raise PropagatorGenerationException("Could not compute a particular solution for the coupled inhomogeneous system containing: "
+                    + ", ".join(str(self.x_[i]) for i in indices)) from exc
+
+            for local_idx, global_idx in enumerate(indices):
+                particular_solutions[global_idx] = (_custom_simplify_expr(x_particular[local_idx, 0]))
+                
+        # guards against nonlinear eq for propagator generation 
         for row in range(P.shape[0]):
-            # assemble update expression for symbol ``self.x_[row]``
-            if not _is_zero(self.c_[row]):
-                raise PropagatorGenerationException("For symbol " + str(self.x_[row]) + ": nonlinear part should be zero for propagators")
+            if not _is_zero(self.c_[row]): 
+                raise PropagatorGenerationException("For symbol "
+                    + str(self.x_[row])
+                    + ": nonlinear part should be zero for propagators")
 
-            if not _is_zero(self.b_[row]) and self.shape_order_from_system_matrix(row) > 1:
-                raise PropagatorGenerationException("For symbol " + str(self.x_[row]) + ": higher-order inhomogeneous ODEs are not supported")
+            # guards against higher-order inhomogenous ODE's having a non zero constant 
+            if (not _is_zero(self.b_[row]) and self.shape_order_from_system_matrix(row) > 1):
+                raise PropagatorGenerationException(
+                    "For symbol "
+                    + str(self.x_[row])
+                    + ": higher-order inhomogeneous ODEs are not supported")
 
             update_expr_terms = []
             for col in range(P.shape[1]):
-                if not _is_zero(P[row, col]):
-                    sym_str = Config().propagators_prefix + "__{}__{}".format(str(self.x_[row]), str(self.x_[col]))
-                    P_expr[sym_str] = P[row, col]
-                    
-                    # (PR 107 removes a secondary guard for ODE neighbour analytical checks making it less strict)
-                    
-                    # reverting PR 107 
-                    if row != col and not _is_zero(self.b_[col]):
+                if not _is_zero(P[row, col]): # for every nonzero entry of the propagator matrix name the symbol 
+                    sym_str = (Config().propagators_prefix + "__{}__{}".format(str(self.x_[row]), str(self.x_[col])))
+                    P_expr[sym_str] = P[row, col] # store the value 
 
-                        print("coupled inhomogenous system")
-                        print(f"row: {self.x_[row]} depends on {self.x_[col]} b[col] {self.b_[col]} + P[row, col] = {P[row, col]}")
+                    if col in particular_solutions: # if col contains a known solution after propagations the deviation from steady state forward 
+                        update_expr_terms.append(sym_str + " * (" + str(self.x_[col]) + " - (" + str(particular_solutions[col]) + "))")
+                    else:
+                        update_expr_terms.append(sym_str + " * " + str(self.x_[col])) # no solution, isolated solving 
 
-                        raise PropagatorGenerationException(
-                            f"the ode for {self.x_[row]} depends on the inhomogenous ode of {self.x_[row]} we can't solve this analytically"
-                        )
+            if row in particular_solutions:
+                update_expr_terms.append("(" + str(particular_solutions[row])+ ")") # add back this row's own steady-state offset
 
-
-
-
-                    update_expr_terms.append(sym_str + " * " + str(self.x_[col]))
-
-            if not _is_zero(self.b_[row]):
-                # this is an inhomogeneous ODE
-                if _is_zero(self.A_[row, row]):
-                    # of the form x' = const
-                    update_expr_terms.append(Config().output_timestep_symbol + " * " + str(self.b_[row]))
-                else:
-
-                    #
-                    #    generate update expressions
-                    #
-
-                    particular_solution = -self.b_[row] / self.A_[row, row]
-                    sym_str = Config().propagators_prefix + "__{}__{}".format(str(self.x_[row]), str(self.x_[row]))
-                    update_expr_terms.append("-" + sym_str + " * " + str(self.x_[row]))    # remove the term (add its inverse) that would have corresponded to a homogeneous solution and that was added in the ``for col...`` loop above
-                    update_expr_terms.append(sym_str + " * (" + str(self.x_[row]) + " - (" + str(particular_solution) + "))" + " + (" + str(particular_solution) + ")")
-
+            # parses solution from plain py into sympy 
             update_expr[str(self.x_[row])] = " + ".join(update_expr_terms)
             update_expr[str(self.x_[row])] = _sympy_parse_real(update_expr[str(self.x_[row])], global_dict=Shape._sympy_globals)
-            if not _is_zero(self.b_[row]):
-                # only simplify in case an inhomogeneous term is present
-                update_expr[str(self.x_[row])] = _custom_simplify_expr(update_expr[str(self.x_[row])])
 
+            if not _is_zero(self.b_[row]):
+                update_expr[str(self.x_[row])] = (_custom_simplify_expr(update_expr[str(self.x_[row])])) # simplify expression
+
+        # gather and store propagators 
         all_state_symbols = [str(sym) for sym in self.x_]
         initial_values = {sym: str(self.get_initial_value(sym)) for sym in all_state_symbols}
         solver_dict = {"solver": "analytical",
@@ -424,6 +454,7 @@ class SystemOfShapes:
 
 
         return solver_dict
+
 
     def generate_numeric_solver(self, state_variables=None):
         r"""

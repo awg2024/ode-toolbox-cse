@@ -29,11 +29,11 @@ import copy
 import json
 
 from dataclasses import dataclass
-from pathlib import path
+from pathlib import Path
 
 import sympy
 
-from .context import odetoolbo
+from .context import odetoolbox
 import os
 
 @dataclass
@@ -53,7 +53,17 @@ class CSEAnalysisPair:
     cse_shape: list 
 
 
-def run_cse_analysis(indict, **analysis_kwargs):
+def load_test_json(filename: str) -> dict:
+    """
+    Load a JSON test fixture file by name.
+    Resolved relative to this file's directory, not the CWD.
+    """
+    filepath = Path(__file__).parent / filename
+
+    with open(filepath, "r") as f:
+        return json.load(f)
+
+def run_cse_analysis_pair(indict, **analysis_kwargs):
 
     """
     Run exactly the same ODE-toolbox twice (cse on/off)
@@ -63,11 +73,9 @@ def run_cse_analysis(indict, **analysis_kwargs):
     if "enable_cse" in analysis_kwargs: 
         raise ValueError("run_cse_analysis_pair controls enable_cse itself")
 
-    baseline_solvers, baseline_shape_sys, baseline_shapes = 
-        odetoolbox.analysis(indict, enable_cse=False, **analysis_json)
+    baseline_solvers, baseline_shape_sys, baseline_shapes = odetoolbox._analysis(indict, enable_cse=False, **analysis_kwargs)
 
-    cse_solvers, cse_shape_sys, cse_shapes = 
-        odetoolbox.analysis(indict, enable_cse=True, **analysis_json)
+    cse_solvers, cse_shape_sys, cse_shapes = odetoolbox._analysis(indict, enable_cse=True, **analysis_kwargs)
 
     return CSEAnalysisPair(
         baseline_solvers=baseline_solvers,
@@ -76,16 +84,6 @@ def run_cse_analysis(indict, **analysis_kwargs):
         cse_solvers=cse_solvers,
         cse_shape_sys=cse_shape_sys,
         cse_shapes=cse_shapes)
-
-def load_repo_json(relative_path):
-
-    """
-    load json files located inside of tests (e.g., amat, lorenz_attr)
-    """
-
-    with relative_path.open() as infile:
-        return json.load(infile)
-
 
 def get_solver(solvers, solver_type):
 

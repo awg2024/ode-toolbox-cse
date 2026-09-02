@@ -387,12 +387,11 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
         for idx, solver_dict in enumerate(solvers_json): # for each idx and equation in the expression
             
             logging.getLogger(__name__).debug(
-                "Applying CSE to %d solver block(s),
-                idx, 
-                solver_dict.get("solver")) # analytical vs numerical
+                "Applying CSE to %d solver block(s): %s",
+                len(solvers_json), ", ".join(solver.get("solver", "unknown") for solver in solvers_json))
             
             # pass solver dict to cse_solver
-            solvers_json[idx] = (_apply_cse_to_solver_blocks(solver_dict, optimise_condition_branches=(enable_cse_condition_branches))) 
+            solvers_json = (_apply_cse_to_solver_blocks([solver_dict, optimise_condition_branches==(enable_cse_condition_branches)]))
      
     #
     #   convert expressions from sympy to string

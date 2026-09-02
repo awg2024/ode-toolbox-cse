@@ -18,9 +18,7 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from tests.test_utils import load_test_json
-from tests.cse_test_utils import (
+from .test_cse_utils import (
     assert_cse_dependency_order,
     assert_cse_region_equivalent,
     assert_cse_region_profitable,
@@ -28,7 +26,8 @@ from tests.cse_test_utils import (
     assert_shape_structure_preserved,
     assert_solver_metadata_preserved,
     get_solver,
-    run_cse_analysis_pair)
+    run_cse_analysis_pair,
+    load_test_json)
 
 
 class TestCSEAnalyticalSolver:
@@ -61,7 +60,6 @@ class TestCSEAnalyticalSolver:
 
         # CSE should not exist in baseline.
         assert "cse" not in baseline_solver
-
 
         # Internal Shape/SystemOfShapes construction must be identical.
         assert_shape_structure_preserved(pair)

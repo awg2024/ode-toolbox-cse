@@ -81,13 +81,16 @@ def count_cse_operations(replacements, reduced_expressions):
     Count operations required after CSE. helper includes calculating the extracted temporary expressions & reduced output expressions 
     """
 
-    # count operations in the main simplified equations
+    # Extract operational cost for main simplified expressions
     reduced_cost = sum(int(sympy.count_ops(expr)) for expr in reduced_expressions.values())
 
-    # Count operations inside the temporary placeholder variables
+    # count operations inside the temporary placeholder variables
     replacement_cost = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
 
-    return replacement_cost + reduced_cost # total final cost of expressions and temporary values 
+    # assign an assignment/lookup penalty for every subexpression extracted
+    temporary_overhead = len(replacements)
+    
+    return (replacement_cost + reduced_cost + temporary_overhead) # total final cost of expressions and temporary values and conservative overhead memory 
 
 
 
@@ -104,32 +107,70 @@ def _apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_
     if not replacements:
         return [], expressions
     
-    # before_cost = count_operations(expressions.values())
-    # after_cost = count_cse_operations(replacements, reduced)
-    # percentage_diff = (before_cost / after_cost) * 100
-
-    #  if baseline_cost > 0:
-    #     percent_reduction = ((baseline_cost - cse_cost) / baseline_cost) * 100
-    #     percent_str = f"{percent_reduction:.2f}% reduction"
-    # else:
-    #     percent_str = "0.00% change (baseline is 0)"
-
-    # print(f"[CSE INFO] Cost BEFORE: {baseline_cost}, AFTER: {cse_cost}, Change: {percent_str}")
-
-
-
-    # logging.getLogger(__name__).debug(
-    #             "CSE Neuron model cost BEFORE: %d, AFTER: %d, percent_diff: %d ,
-    #             before_cost,
-    #             after_cost,
-    #             percentage_diff)
-
-
+    before_cost = count_operations(expressions.values())
+    after_cost = count_cse_operations(replacements, reduced)
+    
     if after_cost >= before_cost:
         return [], expressions # return original form 
 
     return replacements, reduced 
 
+
+
+def _run_profitable_cse(expressions, symbol_prefix):
+
+    """
+    Apply CSE to one execution region and retain it only when the mathematical count of oeprations is reduced
+    """
+
+    if not expressions:
+        return [], expressions
+    
+    replacements, reduced = (common_subexpression_elimination(expressions, symbol_prefix=symbol_prefix))
+
+    if not replacements:
+        logging.getLogger(__name__).debug(
+            "CSE [%s]: no common subexpression found",
+            symbol_prefix)
+        return [], expressions
+
+    before_cost = count_operations(expressions.values())
+
+    after_cost = count_cse_operations(replacements, reduced)
+
+    if before_cost > 0: 
+        reduction = before_cost - after_cost
+        reduction_percentage = (reduction / before_cost) * 100
+    else:
+        reduction = 0
+        reduction_percentage = 0.0
+
+    # costs per execution region 
+    logging.getLogger(__name__).debug(
+        "CSE [%s] estimated symbolic cost "
+        "%d -> %d; reduction=%d (%.2f%%)",
+        symbol_prefix,
+        before_cost,
+        after_cost,
+        reduction,
+        reduction_percentage,
+        len(replacements))
+        
+    # TO DO find the correct threshold 
+    #MIN_CSE_REDUCTION_PERCENT = 5.0
+    #if (after_cost >= before_cost or reduction_percentage < MIN_CSE_REDUCTION_PERCENT):
+    
+    if (after_cost >= before_cost):
+        logging.getLogger(__name__).debug(
+            "CSE [%s] optimisation is rejected because it doesn't reduce symbolic operation count",
+            symbol_prefix)
+        return [], expressions
+
+    logging.getLogger(__name__).debug(
+        "CSE [%s]: accepted",
+        symbol_prefix)
+    
+    return replacements, reduced
 
 def _contains_nonfinite_expression(expressions):
 
@@ -270,15 +311,23 @@ def _apply_cse_to_solver_blocks(solver_blocks, optimise_condition_branches=False
     temporaries cannot leak or collide across solver blocks. 
     """
 
-    result = []
+    if not isinstance(solver_blocks, list):
+        raise TypeError("_apply_cse_to_solver_blocks() expects a list of solver dictionaries",
+                        f"received: {type(solver_blocks).__name__}")
 
+
+    result = []
     multiple_blocks = len(solver_blocks) > 1 
 
     for block_index, solver in enumerate(solver_blocks):
 
+        logging.getLogger(__name__).debug(
+            "Applying CSE to solver block %d (%s)",
+            block_index,
+            solver.get("solver", "unknown"))
+
         if multiple_blocks:
             symbol_prefix = f"__ode_cse_solver_{block_index}_"
-        
         else:
             symbol_prefix = f"__ode_cse_"
         

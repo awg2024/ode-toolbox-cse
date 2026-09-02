@@ -220,12 +220,10 @@ def restore_cse_expression(
     temporary variable back into the expression.
 
     Replacements are processed in reverse because later temporaries may depend
-    on earlier temporaries.
+    on earlier temporaries. Ensures the mathematical expression has not been broken during CSE.
     """
 
-    replacements = deserialize_replacements(
-        replacements
-    )
+    replacements = deserialize_replacements(replacements)
 
     temporary_locals = {
         str(symbol): symbol
@@ -248,10 +246,8 @@ def restore_cse_expression(
     return sympy.simplify(restored)
 
 
-def assert_expressions_equivalent(
-    expected,
-    actual,
-):
+def assert_expressions_equivalent(expected, actual):
+    
     """
     Assert symbolic mathematical equivalence.
     """
@@ -259,12 +255,10 @@ def assert_expressions_equivalent(
     expected = parse_expression(expected)
     actual = parse_expression(actual)
 
-    difference = sympy.simplify(
-        expected - actual
-    )
+    difference = sympy.simplify(expected - actual)
 
     if difference == 0:
-        return
+        return # test has passed 
 
     equals_result = expected.equals(actual)
 
@@ -276,13 +270,7 @@ def assert_expressions_equivalent(
     )
 
 
-def assert_cse_region_equivalent(
-    baseline_solver,
-    cse_solver,
-    region_name,
-    *,
-    require_cse=True,
-):
+def assert_cse_region_equivalent(baseline_solver, cse_solver, region_name, *, require_cse=True):
     """
     Prove mathematical equivalence between one baseline execution region and
     its CSE-reduced counterpart.
@@ -295,17 +283,11 @@ def assert_cse_region_equivalent(
     assert region_name in baseline_solver
     assert region_name in cse_solver
 
-    baseline_region = baseline_solver[
-        region_name
-    ]
+    baseline_region = baseline_solver[region_name]
 
-    cse_region = cse_solver[
-        region_name
-    ]
+    cse_region = cse_solver[region_name]
 
-    assert set(baseline_region.keys()) == set(
-        cse_region.keys()
-    )
+    assert set(baseline_region.keys()) == set(cse_region.keys())
 
     cse_metadata = (
         cse_solver
@@ -340,15 +322,9 @@ def assert_cse_region_equivalent(
 
         else:
             reconstructed_expression = (
-                parse_expression(
-                    cse_expression
-                )
-            )
-
-        assert_expressions_equivalent(
-            baseline_expression,
-            reconstructed_expression,
-        )
+                parse_expression(cse_expression))
+            
+        assert_expressions_equivalent(baseline_expression, reconstructed_expression)
 
 
 def assert_cse_region_profitable(
@@ -358,7 +334,7 @@ def assert_cse_region_profitable(
 ):
     """
     Assert that the retained CSE transformation actually reduces symbolic
-    operation count.
+    operation count. 
     """
 
     replacements_serialized = (
@@ -369,9 +345,7 @@ def assert_cse_region_profitable(
 
     assert replacements_serialized
 
-    replacements = deserialize_replacements(
-        replacements_serialized
-    )
+    replacements = deserialize_replacements(replacements_serialized)
 
     temporary_locals = {
         str(symbol): symbol
@@ -531,9 +505,7 @@ def assert_cse_serialized(
         )
 
 
-def _collect_cse_symbols(
-    solver,
-):
+def _collect_cse_symbols(solver):
     """
     Collect all temporary CSE names in one solver block.
     """

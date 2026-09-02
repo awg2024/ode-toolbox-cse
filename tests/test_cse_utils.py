@@ -382,10 +382,14 @@ def assert_cse_region_profitable(
         ].values()
     )
 
-    cse_cost = (
-        replacement_cost
-        + reduced_cost
-    )
+    if baseline_cost > 0:
+        percent_reduction = ((baseline_cost - cse_cost) / baseline_cost) * 100
+        percent_str = f"{percent_reduction:.2f}% reduction"
+    else:
+        percent_str = "0.00% change (baseline is 0)"
+
+    print(f"[CSE INFO] Cost BEFORE: {baseline_cost}, AFTER: {cse_cost}, Change: {percent_str}")
+
 
     assert cse_cost < baseline_cost, (
         f"CSE was retained for {region_name} "

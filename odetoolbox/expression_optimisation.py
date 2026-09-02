@@ -104,8 +104,26 @@ def _apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_
     if not replacements:
         return [], expressions
     
-    before_cost = count_operations(expressions.values())
-    after_cost = count_cse_operations(replacements, reduced)
+    # before_cost = count_operations(expressions.values())
+    # after_cost = count_cse_operations(replacements, reduced)
+    # percentage_diff = (before_cost / after_cost) * 100
+
+    #  if baseline_cost > 0:
+    #     percent_reduction = ((baseline_cost - cse_cost) / baseline_cost) * 100
+    #     percent_str = f"{percent_reduction:.2f}% reduction"
+    # else:
+    #     percent_str = "0.00% change (baseline is 0)"
+
+    # print(f"[CSE INFO] Cost BEFORE: {baseline_cost}, AFTER: {cse_cost}, Change: {percent_str}")
+
+
+
+    # logging.getLogger(__name__).debug(
+    #             "CSE Neuron model cost BEFORE: %d, AFTER: %d, percent_diff: %d ,
+    #             before_cost,
+    #             after_cost,
+    #             percentage_diff)
+
 
     if after_cost >= before_cost:
         return [], expressions # return original form 

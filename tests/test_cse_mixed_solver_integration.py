@@ -46,8 +46,7 @@ class TestCSEMixedSolver:
             indict,
             disable_stiffness_check=True,
             disable_singularity_detection=True,
-            log_level="DEBUG",
-        )
+            log_level="DEBUG")
 
     
         # Mixed system must produce exactly two solver blocks.
@@ -95,11 +94,7 @@ class TestCSEMixedSolver:
         # copied in from analytical test checks ;;;
         
         assert "cse" in cse_analytical
-
-        assert (
-            "propagators"
-            in cse_analytical["cse"]
-        )
+        assert ("propagators" in cse_analytical["cse"])
 
         assert_cse_region_equivalent(
             baseline_analytical,
@@ -149,3 +144,62 @@ class TestCSEMixedSolver:
         # Each solver's CSE dependency order is valid.
         assert_cse_dependency_order(cse_analytical)
         assert_cse_dependency_order(cse_numerical)
+
+
+    def test_legacy_mixed_fixture_preserved(self):
+
+        """
+        This script is to test an legacy .json file to ensure 
+        that cse is not affecting upstream users.
+        """
+
+
+        indict = load_test_json("mixed_analytic_numerical_no_stiffness.json")
+
+        pair = run_cse_analysis_pair(
+            indict, # enable_cse should be default off 
+            disable_stiffness_check=True,
+            disable_singularity_detection=True,
+            log_level="DEBUG")
+
+        assert len(pair.baseline_solvers) == 2
+        assert len(pair.cse_solvers) == 2
+
+        baseline_analytical = get_solver(
+            pair.baseline_solvers,
+            "analytical",
+        )
+
+        cse_analytical = get_solver(
+            pair.cse_solvers,
+            "analytical",
+        )
+
+        baseline_numerical = get_solver(
+            pair.baseline_solvers,
+            "numeric")
+
+        cse_numerical = get_solver(
+            pair.cse_solvers,
+            "numeric")
+
+        assert_solver_metadata_preserved(
+            baseline_analytical,
+            cse_analytical)
+
+        assert_solver_metadata_preserved(
+            baseline_numerical,
+            cse_numerical)
+
+        # The legacy fixture was not designed specifically for CSE.
+        assert_cse_region_equivalent(
+            baseline_analytical, # comparing two outputs that should be the same since cse was off in both conditions 
+            cse_analytical,
+            "propagators",
+            require_cse=False) #  pipeline pass-through 
+
+        assert_cse_region_equivalent(
+            baseline_numerical,
+            cse_numerical,
+            "update_expressions",
+            require_cse=False)

@@ -94,3 +94,33 @@ class TestCSENumericalSolver:
 
         # Temporary dependency order must be valid (e.g., not calling a tmpvar before it's defined)
         assert_cse_dependency_order(cse_solver)
+
+    def test_legacy_iaf_cond_alpha_preserved(self):
+
+        indict = load_test_json("iaf_cond_alpha.json")
+
+        pair = run_cse_analysis_pair(
+            indict,
+            disable_stiffness_check=True,
+            disable_analytic_solver=True,
+            disable_singularity_detection=True,
+            log_level="DEBUG")
+            
+        baseline_solver = get_solver(
+            pair.baseline_solvers,
+            "numeric")
+
+        cse_solver = get_solver(
+            pair.cse_solvers,
+            "numeric")
+
+        assert_solver_metadata_preserved(
+            baseline_solver,
+            cse_solver)
+
+        assert_cse_region_equivalent(
+            baseline_solver, # check these two solvers are equivalant and upstream numerical users are not being affected. 
+            cse_solver,
+            "update_expressions",
+            require_cse=False)
+

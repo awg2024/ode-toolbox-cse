@@ -1,13 +1,5 @@
-
-class TestCSEAnalyticalSolver:
-
-    r"""This script provides an isolated ODETOOLBOX test for a analytical equation 
-    to ensure the numerical outcome is the same regardless if cse is on or off. """
-
-
-
-
-# test_cse_numerical_solver_integration.py
+#
+# test_cse_analytic_solver_integration.py
 #
 # This file is part of the NEST ODE toolbox.
 #
@@ -25,129 +17,71 @@ class TestCSEAnalyticalSolver:
 #
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
-#
 
-import os
-import pytest
-import sympy
-import numpy as np
-try:
-    import pygsl.odeiv as odeiv
-    PYGSL_AVAILABLE = True
-except ImportError:
-    PYGSL_AVAILABLE = False
 
-import odetoolbox
-from odetoolbox.debug_utils import import_matplotlib
-from odetoolbox.mixed_integrator import MixedIntegrator
 from tests.test_utils import load_test_json
-
-mpl, plt = import_matplotlib()
-ENABLE_PLOTS: bool = mpl is not None
-
-
-class TestCSENumericalSolver:
-
-    r"""This script provides an isolated ODETOOLBOX test for a numerical equation 
-    to ensure the numerical outcome is the same regardless if cse is on or off. """
-
-
-    # def _timeseries_plot(t_log, h_log, y_log, sym_list, basedir="/tmp", fn_snip="", title_snip=""):
-    #     fig, ax = plt.subplots(len(y_log[0]), sharex=True)
-    #     for i, sym in enumerate(sym_list):
-    #         ax[i].plot(1E3 * np.array(t_log), np.array(y_log)[:, i], label=str(sym))
-
-    #     for _ax in ax:
-    #         _ax.legend()
-    #         _ax.grid(True)
-
-    #     ax[-1].set_xlabel("Time [ms]")
-    #     fig.suptitle("Timeseries for mixed integrator numeric test" + title_snip)
-
-    #     fn = os.path.join(basedir, "test_mixed_integrator_numeric_" + fn_snip + ".png")
-    #     print("Saving to " + fn)
-    #     plt.savefig(fn, dpi=600)
-    #     plt.close(fig)
+from tests.cse_test_utils import (
+    assert_cse_dependency_order,
+    assert_cse_region_equivalent,
+    assert_cse_region_profitable,
+    assert_cse_serialized,
+    assert_shape_structure_preserved,
+    assert_solver_metadata_preserved,
+    get_solver,
+    run_cse_analysis_pair)
 
 
-    def _run_simulation(indict, alias_spikes, integrator, params=None, **kwargs):
-        """
-        Parameters
-        ----------
-        params : Optional[Dict]
-            Parameter values to pass to the integrator (overrides parameter values in the input json file).
-        kwargs : Dict
-            Extra parameters passed to ``odetoolbox.analysis()``.
-        """
-      
+class TestCSEAnalyticalSolver:
+    """
+    Isolated ODE-toolbox validation of analytical CSE.
 
-        initial_values = {"g_ex__d": 0., "g_in__d": 0.}    # optionally override initial values
-        initial_values = {sympy.Symbol(k, real=True): v for k, v in initial_values.items()}
-        spike_times = {"g_ex__d": np.array([10E-3]), "g_in__d": np.array([6E-3])}
+    The same model is analysed with CSE disabled and enabled. The test verifies
+    that CSE changes the symbolic representation but not its mathematical
+    meaning.
+    """
 
-        analysis_json, shape_sys, shapes = odetoolbox._analysis(indict, disable_stiffness_check=True, disable_analytic_solver=True, log_level="DEBUG", **kwargs)
+    def test_analytical_cse_pipeline(self):
 
-        assert len(analysis_json) == 1 # was a json produced?
-        assert analysis_json[0]["solver"].startswith("numeric") # did odetoolbox correctly identify it as numeric? 
+        indict = load_test_json("cse_analytical.json")
 
-        _params = indict["parameters"] # user can update params before passing into internal function 
-        if params is not None:
-            _params.update(params)
+        pair = run_cse_analysis_pair(
+            indict,
+            disable_stiffness_check=True,
+            disable_singularity_detection=True,
+            log_level="DEBUG",
+        )
 
-        debug_plot_dir = None
-        if ENABLE_PLOTS:   # only enable plotting if matplotlib was successfully imported
-            debug_plot_dir = "/tmp"
+        # ensure there is output for both conditions 
+        assert len(pair.baseline_solvers) == 1
+        assert len(pair.cse_solvers) == 1
 
+        # ensure solver specified is analytical 
+        baseline_solver = get_solver(pair.baseline_solvers, "analytical")
+        cse_solver = get_solver(pair.cse_solvers,"analytical")
 
-        # calling internal 
-        mixed_integrator = MixedIntegrator(integrator,
-                                        shape_sys,
-                                        shapes,
-                                        analytic_solver_dict=None,
-                                        parameters=_params,
-                                        spike_times=spike_times,
-                                        random_seed=123,
-                                        max_step_size=h,
-                                        integration_accuracy_abs=1E-6,
-                                        integration_accuracy_rel=1E-6,
-                                        sim_time=T,
-                                        alias_spikes=alias_spikes,
-                                        debug_plot_dir=debug_plot_dir)
-        
-        
-        # integrate ode
-        h_min, h_avg, runtime, upper_bound_crossed, t_log, h_log, y_log, sym_list = \
-            mixed_integrator.integrate_ode(initial_values=initial_values,
-                                        h_min_lower_bound=1E-12,
-                                        raise_errors=True,
-                                        debug=True)		# debug needs to be True here to obtain the right return values
-
-        return h_min, h_avg, runtime, upper_bound_crossed, t_log, h_log, y_log, sym_list, analysis_json
+        # CSE should not exist in baseline.
+        assert "cse" not in baseline_solver
 
 
-    def test_numerical_solver(**kwargs):
-        """
-        Numerical validation of MixedIntegrator. Note that this test uses all-numeric (no analytic part) integration to test for time grid aliasing effects of spike times.
+        # Internal Shape/SystemOfShapes construction must be identical.
+        assert_shape_structure_preserved(pair)
 
-        Simulate a conductance-based integrate-and-fire neuron which is receiving spikes. Check for a match of the final system state with a numerical reference value that was validated by hand.
-        """
+        # Solver metadata cannot change.
+        assert_solver_metadata_preserved(baseline_solver, cse_solver)
 
-        integrator = odeiv.step_rk4
+        # json file has repeated propagators (==> profitable) so ensure cse has occured
+        assert "cse" in cse_solver
 
-        for alias_spikes in [True, False]:
-            indict = load_test_json("iaf_cond_alpha.json")
-            h_min, h_avg, runtime, upper_bound_crossed, t_log, h_log, y_log, sym_list, analysis_json = _run_simulation(indict, alias_spikes, integrator)
+        assert ("propagators" in cse_solver["cse"])
 
-            if ENABLE_PLOTS:
-                _timeseries_plot(t_log,
-                                h_log,
-                                y_log,
-                                sym_list=sym_list,
-                                basedir="/tmp",
-                                fn_snip="_[alias=" + str(alias_spikes) + "]_" + str(integrator),
-                                title_snip=" alias spikes: " + str(alias_spikes) + ", " + str(integrator))
+        # reconstruct every CSE expression and prove that it is mathematically the same to the non-cse propagator
+        assert_cse_region_equivalent(baseline_solver, cse_solver, "propagators", require_cse=True)
 
-            if alias_spikes:
-                assert not upper_bound_crossed
-            else:
-                assert upper_bound_crossed
+        # verifies that the optimiser acted correctly, reducing mathematical operation symbol counts. 
+        assert_cse_region_profitable(baseline_solver, cse_solver, "propagators")
+
+        # Check that the metadata returned by _analysis must is JSON-safe.
+        assert_cse_serialized(cse_solver)
+
+        # ensure that CSE solver doesnt contain forward references (e.g., calling a tmp_var before it's defined)
+        assert_cse_dependency_order(cse_solver)

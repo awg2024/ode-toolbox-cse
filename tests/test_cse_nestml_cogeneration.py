@@ -22,7 +22,7 @@
 
 import pytest
 import sympy 
-from odetoolbox.expression_optimisation import *
+import odetoolbox.expression_optimisation as eo 
 from .context import odetoolbox
 
 
@@ -205,7 +205,7 @@ class TestCSECodeGeneration:
         }
 
         # execute region cse optimisation pass 
-        result = apply_cse_to_solver(solver, optimise_condition_branches=True)
+        result = eo.apply_cse_to_solver(solver, optimise_condition_branches=True)
 
         # Isolate the processed output regions
         default_branch = (result["conditions"]["default"]) # default solver with no known singularities 
@@ -292,7 +292,7 @@ class TestCSECodeGeneration:
 
         original_propagators = dict(solver_dict["propagators"]) # saving benchmark 
 
-        result = apply_cse_to_solver(solver_dict) # apply function 
+        result = eo.apply_cse_to_solver(solver_dict) # apply function 
 
         
         assert result["solver"] == "analytical", "Failed: The solver type mutated or was lost."
@@ -338,8 +338,7 @@ class TestCSECodeGeneration:
 
         original_expressions = dict(solver_dict["update_expressions"]) # original update expressions 
 
-        result = apply_cse_to_solver(solver_dict) # apply function 
-
+        result = eo.apply_cse_to_solver(solver_dict) # apply function 
         
         assert result["solver"] == "numeric", "Failed: The solver type mutated or was lost."
         assert "cse" in result, "Failed: 'cse' key dictionary was never initialised."

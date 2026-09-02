@@ -30,8 +30,7 @@ from .config import Config
 from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real # (PR107) removed _find_in_matrix logic helper function 
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
-
-from .expression_optimisation import apply_cse_to_solver, serialize_replacements, _serialize_replacements_metadata
+from .expression_optimisation import (_apply_cse_to_solver_blocks, _serialize_replacements_metadata)
 
 
 try:

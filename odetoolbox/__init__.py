@@ -387,12 +387,12 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
         for idx, solver_dict in enumerate(solvers_json): # for each idx and equation in the expression
             
             logging.getLogger(__name__).debug(
-                "Applying CSE to solver block %d (%s)",
-                idx,  
+                "Applying CSE to %d solver block(s),
+                idx, 
                 solver_dict.get("solver")) # analytical vs numerical
             
             # pass solver dict to cse_solver
-            solvers_json[idx] = (apply_cse_to_solver(solver_dict, optimise_condition_branches=enable_cse_condition_branches)) 
+            solvers_json[idx] = (_apply_cse_to_solver_blocks(solver_dict, optimise_condition_branches=(enable_cse_condition_branches))) 
      
     #
     #   convert expressions from sympy to string
@@ -415,6 +415,11 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
         raise MalformedInputException("``preserve_expressions`` parameter should be either a boolean or a list of strings corresponding to variable names")
 
     for solver_json in solvers_json:
+        
+        #
+        # conversion of update_blocks
+        #
+
         if "update_expressions" in solver_json.keys():
             for sym, expr in solver_json["update_expressions"].items():
                 solver_json["update_expressions"][sym] = str(expr)
@@ -429,9 +434,18 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                     assert var_def_str is not None
                     solver_json["update_expressions"][sym] = var_def_str.replace("'", Config().differential_order_symbol)
 
+        #
+        # conversion of propagators
+        #
+        
         if "propagators" in solver_json.keys():
             for sym, expr in solver_json["propagators"].items():
                 solver_json["propagators"][sym] = str(expr)
+
+        #
+        # conversion of conditional analytical branches 
+        #
+
 
         if "conditions" in solver_json.keys():
             for cond, cond_solver in solver_json["conditions"].items():
@@ -455,11 +469,13 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                 if "propagators" in cond_solver:
                     for sym, expr in cond_solver["propagators"].items():
                         cond_solver["propagators"][sym] = str(expr)
-                        
-   
-    if "cse" in solver_json: # if cse found 
-        for region, replacements in (solver_json["cse"].items()):
-            solver_json["cse"][region] = (serialize_replacements(replacements))
+
+                if "cse" in solver_json:
+                    _serialize_replacements_metadata(cond_solver) # CSE for conditional branches
+
+        if "cse" in solver_json:         
+            _serialize_replacements_metadata(solver_json) # CSE for top-level solvers 
+    
 
     logging.getLogger(__name__).info("Final output result:")
     json.dumps(solvers_json, indent=4, sort_keys=True)   # default hides bugs 

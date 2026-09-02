@@ -85,3 +85,44 @@ class TestCSEAnalyticalSolver:
 
         # ensure that CSE solver doesnt contain forward references (e.g., calling a tmp_var before it's defined)
         assert_cse_dependency_order(cse_solver)
+
+    def test_legacy_analytical_fixture_preserved(self):
+
+        indict = load_test_json(
+            "amat.json") # amat a known linear neuronal model for analytical solvers
+
+        pair = run_cse_analysis_pair(
+            indict,
+            disable_stiffness_check=True,
+            disable_singularity_detection=True,
+            log_level="DEBUG")
+
+        baseline_solver = get_solver(
+            pair.baseline_solvers,
+            "analytical")
+
+        cse_solver = get_solver(
+            pair.cse_solvers,
+            "analytical")
+
+        assert_solver_metadata_preserved(
+            baseline_solver,
+            cse_solver,
+        )
+
+        assert_cse_region_equivalent(
+            baseline_solver,
+            cse_solver,
+            "propagators",
+            require_cse=False)
+
+        if (
+            "update_expressions"
+            in baseline_solver
+        ):
+            assert_cse_region_equivalent(
+                baseline_solver, # ensure that the solvers are the same 
+                cse_solver,
+                "update_expressions",
+                require_cse=False)
+

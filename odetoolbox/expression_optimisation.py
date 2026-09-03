@@ -117,7 +117,7 @@ def _apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_
 
 
 
-def _run_profitable_cse(expressions, symbol_prefix):
+def _run_profitable_cse(expressions, symbol_prefix, solver_name="unknown", region_name="unknown"):
 
     """
     Apply CSE to one execution region and retain it only when the mathematical count of oeprations is reduced
@@ -128,39 +128,50 @@ def _run_profitable_cse(expressions, symbol_prefix):
     
     replacements, reduced = (common_subexpression_elimination(expressions, symbol_prefix=symbol_prefix))
 
+    logger = logging.getLogger(__name__)
+
     if not replacements:
-        logging.getLogger(__name__).debug(
-            "CSE [%s]: no common subexpression found",
-            symbol_prefix)
+        logger.debug("CSE [%s]: no common subexpression found. Replacements: [%s]", symbol_prefix, replacements)
         return [], expressions
 
-    before_cost = count_operations(expressions.values())
+    # mixed updated is returning [] !!! 
+    
+    original_ops = count_operations(expressions.values())
+    replacement_ops = sum(int(sympy.count_ops(expr)) for _, expr in replacements)
+    reduced_ops = sum(int(sympy.count_ops(expr)) for expr in reduced.values()) #  i want to use my count_cse_operations here? 
+    temporary_count = len(replacements)
+    temporary_penalty = temporary_count
 
-    after_cost = count_cse_operations(replacements, reduced)
+    before_cost = original_ops
+    after_cost = replacement_ops + reduced_ops + temporary_penalty
 
-    if before_cost > 0: 
-        reduction = before_cost - after_cost
-        reduction_percentage = (reduction / before_cost) * 100
+    if before_cost > 0:
+        saving = before_cost - after_cost
+        reduction_percentage = (saving / before_cost) * 100
     else:
-        reduction = 0
+        saving = 0
         reduction_percentage = 0.0
 
-    # costs per execution region 
-    logging.getLogger(__name__).debug(
-        "CSE [%s] estimated symbolic cost "
-        "%d -> %d; reduction=%d (%.2f%%), %d replacement(s)",
-        symbol_prefix,
-        before_cost,
-        after_cost,
-        reduction,
-        reduction_percentage,
-        len(replacements))
-        
-    # TO DO find the correct threshold 
-    #MIN_CSE_REDUCTION_PERCENT = 5.0
-    #if (after_cost >= before_cost or reduction_percentage < MIN_CSE_REDUCTION_PERCENT):
-    
-    if (after_cost >= before_cost):
+    decision = "ACCEPT" if after_cost < before_cost else "REJECT"
+
+    logger.debug(
+        "[CSE] solver=%s\n"
+        "[CSE] region=%s\n\n"
+        "original_expression_ops = %d\n"
+        "replacement_ops         = %d\n"
+        "reduced_expression_ops  = %d\n"
+        "temporary_count         = %d\n"
+        "temporary_penalty       = %d\n"
+        "estimated_before         = %d\n"
+        "estimated_after          = %d\n"
+        "estimated_saving         = %d\n"
+        "estimated_reduction      = %.2f%%\n"
+        "decision                 = %s\n",
+        solver_name, region_name,
+        original_ops, replacement_ops, reduced_ops, temporary_count, temporary_penalty,
+        before_cost, after_cost, saving, reduction_percentage, decision)
+
+    if decision == "REJECT":
         logging.getLogger(__name__).debug(
             "CSE [%s] optimisation is rejected because it doesn't reduce symbolic operation count",
             symbol_prefix)
@@ -212,7 +223,7 @@ def _contains_internal_control_flow(expressions):
 
 
 
-def _apply_cse_to_expression_region(region, symbol_prefix):
+def _apply_cse_to_expression_region(region, symbol_prefix, solver_name="unknown"):
 
     """
     Apply CSE independently inside one execution region.
@@ -248,21 +259,23 @@ def _apply_cse_to_expression_region(region, symbol_prefix):
         return result
 
     # analytical 
-    if region.get("propagators"): # run cse for propagators high-level dict
-        replacements, reduced = _run_profitable_cse(region["propagators"], symbol_prefix + "prop_")
-
-        if replacements: # if replacement are present store reduced expressions and tmp values
+    if region.get("propagators"):
+        replacements, reduced = _run_profitable_cse(
+            region["propagators"], symbol_prefix + "prop_",
+            solver_name=solver_name, region_name="propagators")
+        if replacements:
             result["propagators"] = reduced
             cse_data["propagators"] = replacements
 
     # numerical state update expressions 
-    if region.get("update_expressions"): # run cse for propagators high-level dict
-        replacements, reduced = _run_profitable_cse(region["update_expressions"], symbol_prefix + "update_")
-
-        if replacements:  # if replacement are present store reduced expressions and tmp values
+    if region.get("update_expressions"):
+        replacements, reduced = _run_profitable_cse(
+            region["update_expressions"], symbol_prefix + "update_",
+            solver_name=solver_name, region_name="update_expressions")
+        if replacements:
             result["update_expressions"] = reduced
             cse_data["update_expressions"] = replacements
-
+            
     if cse_data:
         result["cse"] = cse_data # output data
 
@@ -276,7 +289,7 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
     """
 
     result = dict(solver)
-    cse_data = {}
+    solver_name = solver.get("solver", "unknown")
 
     if "conditions" in solver: # handle singularity conditions
 
@@ -292,14 +305,14 @@ def apply_cse_to_solver(solver, symbol_prefix="__ode_cse_", optimise_condition_b
 
             branch_prefix = (symbol_prefix + f"cond_{branch_index}_") # distinct condition blocks get their own unique prefix
 
-            optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix) # apply cse to each independent branch
+            optimised_conditions[condition] = _apply_cse_to_expression_region(branch, symbol_prefix=branch_prefix, solver_name=solver_name) # apply cse to each independent branch
 
         result["conditions"] = optimised_conditions
 
         return result # return result if we've conducted cse singularity
 
     # ordinary analytical or numerical solver passing. 
-    return _apply_cse_to_expression_region(solver, symbol_prefix=symbol_prefix)
+    return _apply_cse_to_expression_region(solver, symbol_prefix=symbol_prefix, solver_name=solver_name)
 
 
 def _apply_cse_to_solver_blocks(solver_blocks, optimise_condition_branches=False):
@@ -361,3 +374,29 @@ def _serialize_replacements_metadata(region):
 
         # call the indivudal serialise functon once within the solver
         region["cse"][expression_region] = serialize_replacements(replacements)
+
+def _find_non_json_serializable(obj, path="root"):
+    # Clear terminal conditions for valid JSON types
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return []
+
+    # Handle dictionaries safely
+    if isinstance(obj, dict):
+        problems = []
+        for key, value in obj.items():
+            if not isinstance(key, (str, int, float, bool, type(None))):
+                # Wrapped in a proper 3-element tuple inside the append
+                problems.append((f"{path}.<key>", type(key).__name__, repr(key)))
+            problems.extend(_find_non_json_serializable(value, path=f"{path}[{key!r}]"))
+        return problems 
+    
+    # Handle sequences
+    if isinstance(obj, (list, tuple)):
+        problems = []
+        for index, value in enumerate(obj):
+            problems.extend(_find_non_json_serializable(value, path=f"{path}[{index}]"))
+        return problems 
+        
+    # Catch-all for non-serializable objects (like SymPy Symbols)
+    # Corrected to a uniform list containing a single 3-element tuple
+    return [(path, type(obj).__name__, repr(obj))]

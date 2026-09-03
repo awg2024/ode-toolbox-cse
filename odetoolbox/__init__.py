@@ -30,7 +30,7 @@ from .config import Config
 from .sympy_helpers import _check_numerical_issue, _check_forbidden_name, _is_zero, _is_sympy_type, SympyPrinter, _sympy_parse_real # (PR107) removed _find_in_matrix logic helper function 
 from .system_of_shapes import SystemOfShapes
 from .shapes import MalformedInputException, Shape
-from .expression_optimisation import (_apply_cse_to_solver_blocks, _serialize_replacements_metadata)
+from .expression_optimisation import (_apply_cse_to_solver_blocks, _serialize_replacements_metadata, _find_non_json_serializable)
 
 
 try:
@@ -384,16 +384,14 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
 
     if enable_cse:  # if cse flag is enabled 
 
-        for idx, solver_dict in enumerate(solvers_json): # for each idx and equation in the expression
+        logging.getLogger(__name__).debug(
+            "Applying CSE to %d solver block(s): %s",
+            len(solvers_json), ", ".join(solver.get("solver", "unknown") for solver in solvers_json))
             
-            logging.getLogger(__name__).debug(
-                "Applying CSE to %d solver block(s): %s",
-                len(solvers_json), ", ".join(solver.get("solver", "unknown") for solver in solvers_json))
+        # pass solver dict as a list into blocks
+        solvers_json = (_apply_cse_to_solver_blocks(solvers_json, optimise_condition_branches=enable_cse_condition_branches))
             
-            # pass solver dict as a list into blocks
-            solvers_json = (_apply_cse_to_solver_blocks([solver_dict], optimise_condition_branches=enable_cse_condition_branches))
-            
-     
+
     #
     #   convert expressions from sympy to string
     #   
@@ -470,15 +468,27 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                     for sym, expr in cond_solver["propagators"].items():
                         cond_solver["propagators"][sym] = str(expr)
 
+                # serialisation belonging to conditional branches
                 if "cse" in solver_json:
                     _serialize_replacements_metadata(cond_solver) # CSE for conditional branches
 
+        # serialisation cse metadata belonging to this solver. 
         if "cse" in solver_json:         
             _serialize_replacements_metadata(solver_json) # CSE for top-level solvers 
-    
+        
 
     logging.getLogger(__name__).info("Final output result:")
+
+    problems = _find_non_json_serializable(solver_json)
+    for path, type_name, value in problems: # specific json serialization debug 
+        logging.getLogger(__name__).error("non-json value %s -> %s: %s",
+        path, type_name, value)
+
+    assert not problems, ("Non-JSON safe objects remain in solver_json")
+
+    # output log the json file 
     json.dumps(solvers_json, indent=4, sort_keys=True)   # default hides bugs 
+    
 
     return solvers_json, shape_sys, shapes
 

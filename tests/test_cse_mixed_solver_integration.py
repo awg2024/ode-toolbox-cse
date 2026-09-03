@@ -17,9 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
-from tests.test_utils import load_test_json
-
-from tests.cse_test_utils import (
+from .test_cse_utils import (
     assert_cse_dependency_order,
     assert_cse_region_equivalent,
     assert_cse_region_profitable,
@@ -29,6 +27,7 @@ from tests.cse_test_utils import (
     assert_solver_metadata_preserved,
     get_solver,
     run_cse_analysis_pair,
+    load_test_json
 )
 
 
@@ -47,12 +46,10 @@ class TestCSEMixedSolver:
             disable_stiffness_check=True,
             disable_singularity_detection=True,
             log_level="DEBUG")
-
-    
+       
         # Mixed system must produce exactly two solver blocks.
-        assert len(pair.baseline_solvers) == 2
-        assert len(pair.cse_solvers) == 2
-
+        assert len(pair.baseline_solvers) == 2, f"Baseline solver does not contain two solver blocks, it contains: {pair.baseline_solvers}"
+        assert len(pair.cse_solvers) == 2, f"CSE solver does not contain two solver blocks, it contains: {pair.cse_solvers}"
     
         # Extract corresponding blocks by solver type rather than relying on
         # list ordering.
@@ -162,8 +159,10 @@ class TestCSEMixedSolver:
             disable_singularity_detection=True,
             log_level="DEBUG")
 
-        assert len(pair.baseline_solvers) == 2
-        assert len(pair.cse_solvers) == 2
+        # Mixed system must produce exactly two solver blocks.
+        assert len(pair.baseline_solvers) == 2, f"Baseline solver does not contain two solver blocks, it contains: {pair.baseline_solvers}"
+        assert len(pair.cse_solvers) == 2, f"CSE solver does not contain two solver blocks, it contains: {pair.cse_solvers}"
+    
 
         baseline_analytical = get_solver(
             pair.baseline_solvers,

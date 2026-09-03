@@ -19,9 +19,7 @@
 # along with NEST.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from tests.test_utils import load_test_json
-
-from tests.cse_test_utils import (
+from .test_cse_utils import (
     assert_cse_dependency_order,
     assert_cse_region_equivalent,
     assert_cse_region_profitable,
@@ -30,6 +28,7 @@ from tests.cse_test_utils import (
     assert_solver_metadata_preserved,
     get_solver,
     run_cse_analysis_pair,
+    load_test_json
 )
 
 

@@ -390,8 +390,9 @@ log_level: Union[str, int] = logging.WARNING) -> Tuple[List[Dict], SystemOfShape
                 "Applying CSE to %d solver block(s): %s",
                 len(solvers_json), ", ".join(solver.get("solver", "unknown") for solver in solvers_json))
             
-            # pass solver dict to cse_solver
-            solvers_json = (_apply_cse_to_solver_blocks([solver_dict, optimise_condition_branches==(enable_cse_condition_branches)]))
+            # pass solver dict as a list into blocks
+            solvers_json = (_apply_cse_to_solver_blocks([solver_dict], optimise_condition_branches=enable_cse_condition_branches))
+            
      
     #
     #   convert expressions from sympy to string

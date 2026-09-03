@@ -43,14 +43,14 @@ class CSEAnalysisPair:
     """
     
     # defining output from conditions from _analysis
-    baseline_solver: list
-    cse_sovler: list
+    baseline_solvers: list
+    cse_solvers: list
 
     baseline_shape_sys: list
     cse_shape_sys: list
 
     baseline_shapes: list
-    cse_shape: list 
+    cse_shapes: list 
 
 
 def load_test_json(filename: str) -> dict:
@@ -94,7 +94,7 @@ def get_solver(solvers, solver_type):
     if solver_type == "numeric":
         matches = [solver for solver in solvers if solver["solver"].startswith("numeric")]
     else:
-        matches = [solver for solver in solvers if sovler["solver"] == solver_type]
+        matches = [solver for solver in solvers if solver["solver"] == solver_type]
 
     assert len(matches) == 1, f"expected exactly one {solver_type} solver"
 
@@ -121,20 +121,21 @@ def parse_expression(expression, extra_locals=None):
     Convert serialized ODE-toolbox output back to a SymPy expression.
     """
 
-    if isinstance(expression, sympy.Basic):
+    if isinstance(expression, sympy.Basic): # checks if the expression is already a Sympy object 
         return expression
 
-    locals_dict = dict(_SYMPY_LOCALS)
+    # explicit mapping for mathematical equations from string to sympy
+    locals_dict = dict(_SYMPY_LOCALS) # otherwise can be confused for variables 
 
     if extra_locals:
-        locals_dict.update(extra_locals)
+        locals_dict.update(extra_locals) # specific locals to the expression we can pass in 
 
     return sympy.sympify(
         expression,
-        locals=locals_dict)
+        locals=locals_dict) # evaluates string into a sympy expression with local dict we just built. 
 
 
-def deserialize_replacements(replacements):
+def deserialize_replacements(replacements, model_symbols=None):
     
     """
     Convert serialized CSE metadata back into ordered SymPy replacement pairs.
@@ -188,22 +189,23 @@ def deserialize_replacements(replacements):
     #
     # Create every temporary Symbol first.
     #
-    temporary_symbols = {
-        symbol_name: sympy.Symbol(symbol_name)
-        for symbol_name in replacements.keys()
-    }
+    temporary_symbols = {symbol_name: sympy.Symbol(symbol_name)
+        for symbol_name in replacements.keys()}
 
-    result = []
+
+    all_locals = dict(model_symbols or {})
+    all_locals.update(temporary_symbols)  # CSE temps take precedence if names ever collide
 
     #
     # Dictionary insertion order preserves SymPy CSE dependency order.
     #
+
+    result = []
+
     for symbol_name, expression in replacements.items():
 
         temporary_symbol = temporary_symbols[symbol_name]
-
-        parsed_expression = parse_expression(expression, extra_locals=temporary_symbols)
-
+        parsed_expression = parse_expression(expression, extra_locals=all_locals)
         result.append((temporary_symbol, parsed_expression))
 
     return result
@@ -212,6 +214,7 @@ def deserialize_replacements(replacements):
 def restore_cse_expression(
     reduced_expression,
     replacements,
+    model_symbols=None
 ):
     """
     Reconstruct a CSE-reduced expression by substituting every generated
@@ -221,7 +224,7 @@ def restore_cse_expression(
     on earlier temporaries. Ensures the mathematical expression has not been broken during CSE.
     """
 
-    replacements = deserialize_replacements(replacements)
+    replacements = deserialize_replacements(replacements, model_symbols)
 
     temporary_locals = {
         str(symbol): symbol
@@ -311,12 +314,9 @@ def assert_cse_region_equivalent(baseline_solver, cse_solver, region_name, *, re
 
         if cse_metadata:
 
-            reconstructed_expression = (
-                restore_cse_expression(
-                    cse_expression,
-                    cse_metadata,
-                )
-            )
+            model_symbols = {name: sympy.Symbol(name) for name in list(baseline_solver.get("state_variables", [])) + list(baseline_solver.get("parameters", {}).keys())}
+
+            reconstructed_expression = (restore_cse_expression(cse_expression, replacements, model_symbols=model_symbols))
 
         else:
             reconstructed_expression = (
@@ -347,8 +347,7 @@ def assert_cse_region_profitable(
 
     temporary_locals = {
         str(symbol): symbol
-        for symbol, _ in replacements
-    }
+        for symbol, _ in replacements}
 
     baseline_cost = sum(
         int(

@@ -148,7 +148,7 @@ def _run_profitable_cse(expressions, symbol_prefix):
     # costs per execution region 
     logging.getLogger(__name__).debug(
         "CSE [%s] estimated symbolic cost "
-        "%d -> %d; reduction=%d (%.2f%%)",
+        "%d -> %d; reduction=%d (%.2f%%), %d replacement(s)",
         symbol_prefix,
         before_cost,
         after_cost,

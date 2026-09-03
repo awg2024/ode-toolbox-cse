@@ -103,10 +103,7 @@ class TestCSEAnalyticalSolver:
             pair.cse_solvers,
             "analytical")
 
-        assert_solver_metadata_preserved(
-            baseline_solver,
-            cse_solver,
-        )
+        assert_solver_metadata_preserved(baseline_solver, cse_solver)
 
         assert_cse_region_equivalent(
             baseline_solver,
@@ -114,10 +111,8 @@ class TestCSEAnalyticalSolver:
             "propagators",
             require_cse=False)
 
-        if (
-            "update_expressions"
-            in baseline_solver
-        ):
+        if ("update_expressions" in baseline_solver): 
+
             assert_cse_region_equivalent(
                 baseline_solver, # ensure that the solvers are the same 
                 cse_solver,

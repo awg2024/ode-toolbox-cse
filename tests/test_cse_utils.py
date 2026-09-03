@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re 
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,9 +74,13 @@ def run_cse_analysis_pair(indict, **analysis_kwargs):
     if "enable_cse" in analysis_kwargs: 
         raise ValueError("run_cse_analysis_pair controls enable_cse itself")
 
-    baseline_solvers, baseline_shape_sys, baseline_shapes = odetoolbox._analysis(indict, enable_cse=False, **analysis_kwargs)
+    baseline_input = copy.deepcopy(indict)
+    cse_input = copy.deepcopy(indict)
+    
 
-    cse_solvers, cse_shape_sys, cse_shapes = odetoolbox._analysis(indict, enable_cse=True, **analysis_kwargs)
+    baseline_solvers, baseline_shape_sys, baseline_shapes = odetoolbox._analysis(baseline_input, enable_cse=False, **analysis_kwargs)
+
+    cse_solvers, cse_shape_sys, cse_shapes = odetoolbox._analysis(cse_input, enable_cse=True, **analysis_kwargs)
 
     return CSEAnalysisPair(
         baseline_solvers=baseline_solvers,
@@ -91,12 +96,18 @@ def get_solver(solvers, solver_type):
     retrieve exactly one solver by type (numeric, numeric-rk4, numeric-4kf45)
     """
 
-    if solver_type == "numeric":
-        matches = [solver for solver in solvers if solver["solver"].startswith("numeric")]
-    else:
-        matches = [solver for solver in solvers if solver["solver"] == solver_type]
+    assert isinstance(solvers, list), (f"get_solver() expects list[dict] and received: {type(solvers).__name__}")
 
-    assert len(matches) == 1, f"expected exactly one {solver_type} solver"
+    for index, solver in enumerate(solvers):
+
+        assert isinstance(solver, dict), (f"Solver {index} should be a dict and received: {type(solver).__name__}")
+
+    if solver_type == "numeric":
+        matches = [solver for solver in solvers if solver.get("solver", "",).startswith("numeric")]
+    else:
+        matches = [solver for solver in solvers if solver.get("solver") == solver_type]
+
+    assert len(matches) == 1, f"Expected exactly one {solver_type} solver and found {len(matches)} available solvers: {[s.get('solver') for s in solvers]}"
 
     return matches[0]
 
@@ -123,9 +134,19 @@ def parse_expression(expression, extra_locals=None):
 
     if isinstance(expression, sympy.Basic): # checks if the expression is already a Sympy object 
         return expression
+    
+    expression = str(expression)
 
     # explicit mapping for mathematical equations from string to sympy
     locals_dict = dict(_SYMPY_LOCALS) # otherwise can be confused for variables 
+
+    # find all identifiers appearing in serialized expression 
+    identifiers = set(re.findall(r"\b[A-Za-z_]\w*\b", expression))
+
+    # anything that is not one of our explicitly recognised functions is not a model symbol
+    for name in identifiers:
+        if name not in locals_dict:
+            locals_dict[name] = sympy.Symbol(name)
 
     if extra_locals:
         locals_dict.update(extra_locals) # specific locals to the expression we can pass in 
@@ -135,19 +156,18 @@ def parse_expression(expression, extra_locals=None):
         locals=locals_dict) # evaluates string into a sympy expression with local dict we just built. 
 
 
-def deserialize_replacements(replacements, model_symbols=None):
+def deserialize_replacements(replacements):
     
     """
     Convert serialized CSE metadata back into ordered SymPy replacement pairs.
 
-    Supports the current format:
-
+    Runtime CSE representations: [(Symbol(...), Expr(...)), ...]
+    
+    Serialized _analysis() representation: 
         {
             "__ode_cse_update_0": "x + y",
             "__ode_cse_update_1": "exp(__ode_cse_update_0)"
         }
-
-    and also accepts raw ``[(Symbol, Expr), ...]`` data for convenience.
     """
 
     if replacements is None:
@@ -164,37 +184,20 @@ def deserialize_replacements(replacements, model_symbols=None):
             for item in replacements
         ):
             return list(replacements)
-
-        #
-        # Compatibility with possible
-        # [{"symbol": ..., "expression": ...}] representations? this is the representation for codeg? 
-        #
-        if all(
-            isinstance(item, dict)
-            and "symbol" in item
-            and "expression" in item
-            for item in replacements
-        ):
-            replacements = {
-                item["symbol"]: item["expression"]
-                for item in replacements
-            }
+        
+        raise TypeError("List/tuple CSE replacements must contain (symbol, expression) pairs")
 
     if not isinstance(replacements, dict):
         raise TypeError(
-            "Unknown CSE replacement representation: "
-            f"{type(replacements)}"
-        )
+            "Expected CSE replacements to be either a dict or list of tuples"
+            f"got {type(replacements).__name__}")
+
 
     #
     # Create every temporary Symbol first.
     #
-    temporary_symbols = {symbol_name: sympy.Symbol(symbol_name)
-        for symbol_name in replacements.keys()}
-
-
-    all_locals = dict(model_symbols or {})
-    all_locals.update(temporary_symbols)  # CSE temps take precedence if names ever collide
+    temporary_symbols = {name: sympy.Symbol(name)
+        for name in replacements}
 
     #
     # Dictionary insertion order preserves SymPy CSE dependency order.
@@ -202,20 +205,19 @@ def deserialize_replacements(replacements, model_symbols=None):
 
     result = []
 
-    for symbol_name, expression in replacements.items():
+    for symbol_name, expression_string in replacements.items():
 
         temporary_symbol = temporary_symbols[symbol_name]
-        parsed_expression = parse_expression(expression, extra_locals=all_locals)
-        result.append((temporary_symbol, parsed_expression))
+        expression = parse_expression(expression_string, extra_locals=temporary_symbols)
+        result.append((temporary_symbol, expression))
 
     return result
 
 
 def restore_cse_expression(
     reduced_expression,
-    replacements,
-    model_symbols=None
-):
+    replacements):
+
     """
     Reconstruct a CSE-reduced expression by substituting every generated
     temporary variable back into the expression.
@@ -224,7 +226,7 @@ def restore_cse_expression(
     on earlier temporaries. Ensures the mathematical expression has not been broken during CSE.
     """
 
-    replacements = deserialize_replacements(replacements, model_symbols)
+    replacements = deserialize_replacements(replacements)
 
     temporary_locals = {
         str(symbol): symbol
@@ -236,6 +238,7 @@ def restore_cse_expression(
         extra_locals=temporary_locals,
     )
 
+    # reversed substition is essential
     for temporary, expression in reversed(
         replacements
     ):
@@ -281,20 +284,30 @@ def assert_cse_region_equivalent(baseline_solver, cse_solver, region_name, *, re
         region_name="update_expressions"
     """
 
-    assert region_name in baseline_solver
-    assert region_name in cse_solver
+    assert isinstance(baseline_solver, dict)
+    assert isinstance(cse_solver, dict)
+
+    assert region_name in baseline_solver, f"Baseline solver has no '{region_name}' region"
+    assert region_name in cse_solver, f"CSE solver has no '{region_name}' region"
 
     baseline_region = baseline_solver[region_name]
-
     cse_region = cse_solver[region_name]
 
+    assert isinstance(baseline_region, dict)
+    assert isinstance(cse_region, dict)
+
+
+    # CSE must not add or remove expressions
     assert set(baseline_region.keys()) == set(cse_region.keys())
 
+
+    # serialize cse metadata returned by _analysis 
     cse_metadata = (
         cse_solver
         .get("cse", {})
         .get(region_name)
     )
+
 
     if require_cse:
         assert cse_metadata, (
@@ -314,13 +327,11 @@ def assert_cse_region_equivalent(baseline_solver, cse_solver, region_name, *, re
 
         if cse_metadata:
 
-            model_symbols = {name: sympy.Symbol(name) for name in list(baseline_solver.get("state_variables", [])) + list(baseline_solver.get("parameters", {}).keys())}
-
-            reconstructed_expression = (restore_cse_expression(cse_expression, replacements, model_symbols=model_symbols))
+            reconstructed_expression = restore_cse_expression(cse_expression, cse_metadata)
 
         else:
-            reconstructed_expression = (
-                parse_expression(cse_expression))
+
+            reconstructed_expression = (parse_expression(cse_expression))
             
         assert_expressions_equivalent(baseline_expression, reconstructed_expression)
 
@@ -341,7 +352,7 @@ def assert_cse_region_profitable(
         .get(region_name)
     )
 
-    assert replacements_serialized
+    assert replacements_serialized, f"No CSE replacements found for '{region_name}'"
 
     replacements = deserialize_replacements(replacements_serialized)
 
@@ -349,22 +360,15 @@ def assert_cse_region_profitable(
         str(symbol): symbol
         for symbol, _ in replacements}
 
-    baseline_cost = sum(
-        int(
-            sympy.count_ops(
-                parse_expression(expression)
-            )
-        )
-        for expression in baseline_solver[
-            region_name
-        ].values()
-    )
+    # cost before cse
+    baseline_cost = sum(int(sympy.count_ops(parse_expression(expression)))
+        for expression in baseline_solver[region_name].values())
 
-    replacement_cost = sum(
-        int(sympy.count_ops(expression))
-        for _, expression in replacements
-    )
+    # cost of calculating the temporaries 
+    replacement_cost = sum(int(sympy.count_ops(expression))
+        for _, expression in replacements)
 
+    # cost of the final reduced expressions 
     reduced_cost = sum(
         int(
             sympy.count_ops(
@@ -379,20 +383,32 @@ def assert_cse_region_profitable(
         ].values()
     )
 
+    # calculate overhead by the length of tmp variable name 
+    temporary_overhead = len(replacements)
+
+    cse_cost = (replacement_cost # cost to calculate the original expression first time
+    + reduced_cost +  # reduced cost to read the new expression
+    temporary_overhead) # overhead of creating a new variable 
+
+    reduction = (baseline_cost - cse_cost)
+
     if baseline_cost > 0:
-        percent_reduction = ((baseline_cost - cse_cost) / baseline_cost) * 100
-        percent_str = f"{percent_reduction:.2f}% reduction"
+        percent_reduction = ((reduction) / baseline_cost) * 100
     else:
-        percent_str = "0.00% change (baseline is 0)"
+        percent_reduction = 0.0 
 
-    print(f"[CSE INFO] Cost BEFORE: {baseline_cost}, AFTER: {cse_cost}, Change: {percent_str}")
-
+    print("[CSE TEST]"
+    f"region={region_name}: "
+    f"before={baseline_cost}, "
+    f"after={cse_cost}, "
+    f"saving={reduction}, "
+    f"percentage_reduction: {percent_reduction:.2f}% ", 
+    f"temporaries={len(replacements)}")
 
     assert cse_cost < baseline_cost, (
         f"CSE was retained for {region_name} "
         f"but did not lower operation count: "
-        f"{baseline_cost} -> {cse_cost}"
-    )
+        f"{baseline_cost} -> {cse_cost}")
 
 
 def assert_solver_metadata_preserved(
